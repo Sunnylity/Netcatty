@@ -672,6 +672,8 @@ export const zhCNCoreMessages: Messages = {
   'dataRelay.form.destPath': '目标路径',
   'dataRelay.form.destPathPlaceholder': '/var/log/incoming/',
   'dataRelay.form.destPathHint': '在目标设备上选择文件夹。',
+  'dataRelay.form.browseLocal': '选择本地文件夹',
+  'dataRelay.form.localBrowseUnavailable': '系统文件夹选择器不可用',
   'dataRelay.form.browse': '浏览',
   'dataRelay.form.writeMode': '写入方式',
   'dataRelay.form.autoStart': '启动时自动开始',

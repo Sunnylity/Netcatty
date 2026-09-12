@@ -1036,6 +1036,8 @@ Highlight the focused split pane:
   'dataRelay.form.destPath': 'Destination folder',
   'dataRelay.form.destPathPlaceholder': '/var/log/incoming/',
   'dataRelay.form.destPathHint': 'Choose a folder on the destination host.',
+  'dataRelay.form.browseLocal': 'Choose a local folder',
+  'dataRelay.form.localBrowseUnavailable': 'The system folder picker is unavailable',
   'dataRelay.form.browse': 'Browse',
   'dataRelay.form.writeMode': 'Write mode',
   'dataRelay.form.autoStart': 'Start on launch',

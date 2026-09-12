@@ -994,6 +994,8 @@ Resalta el panel dividido enfocado:
   'dataRelay.form.destPath': 'Carpeta de destino',
   'dataRelay.form.destPathPlaceholder': '/var/log/incoming/',
   'dataRelay.form.destPathHint': 'Elige una carpeta en el host de destino.',
+  'dataRelay.form.browseLocal': 'Elegir una carpeta local',
+  'dataRelay.form.localBrowseUnavailable': 'El selector de carpetas del sistema no está disponible',
   'dataRelay.form.browse': 'Explorar',
   'dataRelay.form.writeMode': 'Modo de escritura',
   'dataRelay.form.autoStart': 'Iniciar al arrancar',

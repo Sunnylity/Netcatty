@@ -1019,6 +1019,8 @@ export const ruCoreMessages: Messages = {
   'dataRelay.form.destPath': 'Целевая папка',
   'dataRelay.form.destPathPlaceholder': '/var/log/incoming/',
   'dataRelay.form.destPathHint': 'Выберите папку на целевом хосте.',
+  'dataRelay.form.browseLocal': 'Выбрать локальную папку',
+  'dataRelay.form.localBrowseUnavailable': 'Системный диалог выбора папки недоступен',
   'dataRelay.form.browse': 'Обзор',
   'dataRelay.form.writeMode': 'Режим записи',
   'dataRelay.form.autoStart': 'Запускать при старте',

@@ -675,6 +675,8 @@ export const zhTWCoreMessages: Messages = {
   'dataRelay.form.destPath': '目標路徑',
   'dataRelay.form.destPathPlaceholder': '/var/log/incoming/',
   'dataRelay.form.destPathHint': '在目標裝置上選擇資料夾。',
+  'dataRelay.form.browseLocal': '選擇本機資料夾',
+  'dataRelay.form.localBrowseUnavailable': '系統資料夾選擇器無法使用',
   'dataRelay.form.browse': '瀏覽',
   'dataRelay.form.writeMode': '寫入方式',
   'dataRelay.form.autoStart': '啟動時自動開始',

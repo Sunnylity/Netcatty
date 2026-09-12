@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { useI18n } from '../../application/i18n/I18nProvider';
 import { resolveHostOs } from '../../domain/host';
 import { DATA_RELAY_LOCAL_HOST_ID, isDataRelayLocalHostId } from '../../domain/dataRelayLocal';
+import { useLocalDirectoryPicker } from '../../application/state/useLocalDirectoryPicker';
 import {
   buildDataRelayFollowCommand,
 } from '../../domain/dataRelayPaths';
@@ -22,6 +23,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Switch } from '../ui/switch';
+import { toast } from '../ui/toast';
 import {
   RemotePathBrowserDialog,
   type RemotePathBrowserHostContext,
@@ -88,6 +90,24 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
       });
     }
     onChange(updates);
+  };
+
+  // Local endpoints browse through the native OS folder picker.
+  const { available: localPickerAvailable, pickDirectory } = useLocalDirectoryPicker();
+  const browseLocalPath = async (target: 'source' | 'dest') => {
+    if (!localPickerAvailable) {
+      toast.error(t('dataRelay.form.localBrowseUnavailable'));
+      return;
+    }
+    const current = ((target === 'source' ? draft.sourcePath : draft.destPath) || '').trim();
+    try {
+      const selected = await pickDirectory(t('dataRelay.form.browseLocal'), current || undefined);
+      if (!selected) return;
+      if (target === 'source') applySourcePath(selected);
+      else onChange({ destPath: selected });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
   };
 
   return (
@@ -163,7 +183,18 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
               value={draft.sourcePath || ''}
               onChange={(event) => applySourcePath(event.target.value)}
             />
-            {sourceIsLocal ? null : (
+            {sourceIsLocal ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 shrink-0"
+                title={t('dataRelay.form.browseLocal')}
+                onClick={() => void browseLocalPath('source')}
+              >
+                <FolderOpen size={16} />
+              </Button>
+            ) : (
               <Button
                 type="button"
                 variant="outline"
@@ -217,7 +248,18 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
               value={draft.destPath || ''}
               onChange={(event) => onChange({ destPath: event.target.value })}
             />
-            {destIsLocal ? null : (
+            {destIsLocal ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 shrink-0"
+                title={t('dataRelay.form.browseLocal')}
+                onClick={() => void browseLocalPath('dest')}
+              >
+                <FolderOpen size={16} />
+              </Button>
+            ) : (
               <Button
                 type="button"
                 variant="outline"
