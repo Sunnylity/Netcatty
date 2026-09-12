@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildDataRelayFollowCommand,
+  dataRelaySubdirUploadRelativeDir,
   getDataRelayFileName,
   joinDataRelayPath,
   resolveDataRelayDestPath,
@@ -61,6 +62,20 @@ test("resolveDataRelayViewerStart lists the configured folder under remote home"
   assert.deepEqual(
     resolveDataRelayViewerStart("C:\\data\\in\\", "C:\\Users\\admin"),
     { listPath: "C:\\data\\in" },
+  );
+});
+
+test("dataRelaySubdirUploadRelativeDir mirrors the browsed position under the sync root", () => {
+  assert.equal(dataRelaySubdirUploadRelativeDir("/srv/root", "/srv/root", "dist"), "dist");
+  assert.equal(dataRelaySubdirUploadRelativeDir("/srv/root", "/srv/root/apps/web", "dist"), "apps/web/dist");
+  assert.equal(dataRelaySubdirUploadRelativeDir("/srv/root", "/srv/root/", "dist"), "dist");
+  // Browsing outside the sync root lands at the destination root top level.
+  assert.equal(dataRelaySubdirUploadRelativeDir("/srv/root", "/etc", "dist"), "dist");
+  assert.equal(dataRelaySubdirUploadRelativeDir("/srv/root", "", "dist"), "dist");
+  // Windows-style roots compare case-insensitively.
+  assert.equal(
+    dataRelaySubdirUploadRelativeDir("C:\\Sync\\root", "c:/sync/root/apps", "dist"),
+    "apps/dist",
   );
 });
 

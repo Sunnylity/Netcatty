@@ -8,6 +8,7 @@ import {
   RefreshCw,
   Terminal,
   Trash2,
+  Upload,
 } from "lucide-react";
 import React from "react";
 import { useI18n } from "../../application/i18n/I18nProvider";
@@ -44,6 +45,8 @@ export interface PathListContextActions {
   onOpenTerminal?: () => void;
   onRefresh?: () => void;
   onDelete?: () => void;
+  /** Push one source subdirectory to the destination, overwriting. */
+  onUploadDir?: () => void;
 }
 
 const PathListContextMenuItems: React.FC<PathListContextActions & { variant: "row" | "empty" }> = ({
@@ -59,6 +62,7 @@ const PathListContextMenuItems: React.FC<PathListContextActions & { variant: "ro
   onOpenTerminal,
   onRefresh,
   onDelete,
+  onUploadDir,
 }) => {
   const { t } = useI18n();
   const clipboard = useDataRelayPathClipboard();
@@ -79,6 +83,15 @@ const PathListContextMenuItems: React.FC<PathListContextActions & { variant: "ro
           <ClipboardPaste size={14} className="mr-2" />
           {t("dataRelay.context.paste")}
         </ContextMenuItem>
+        {onUploadDir ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem disabled={disabled} onSelect={onUploadDir}>
+              <Upload size={14} className="mr-2" />
+              {t("dataRelay.context.uploadDir")}
+            </ContextMenuItem>
+          </>
+        ) : null}
         <ContextMenuSeparator />
         <ContextMenuItem disabled={disabled} onSelect={onNewFolder}>
           <FolderPlus size={14} className="mr-2" />
@@ -265,6 +278,89 @@ export const PathListDeleteConfirmDialog: React.FC<PathListDeleteConfirmDialogPr
 };
 
 export type PathNameDialogKind = "folder" | "file";
+
+export interface PathListUploadConfirmDialogProps {
+  open: boolean;
+  hostLabel?: string;
+  path: string;
+  targetPath?: string;
+  uploading?: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}
+
+export const PathListUploadConfirmDialog: React.FC<PathListUploadConfirmDialogProps> = ({
+  open,
+  hostLabel,
+  path,
+  targetPath,
+  uploading = false,
+  onOpenChange,
+  onConfirm,
+}) => {
+  const { t } = useI18n();
+  const confirmButtonRef = React.useRef<HTMLButtonElement>(null);
+  const name = getFileName(path) || path;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (uploading) return;
+        onOpenChange(nextOpen);
+      }}
+    >
+      <DialogContent
+        className="max-w-[calc(100vw-2rem)] overflow-hidden sm:max-w-sm"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          confirmButtonRef.current?.focus();
+        }}
+      >
+        <DialogHeader className="min-w-0 pr-6">
+          <DialogTitle className="truncate">
+            {t("dataRelay.context.uploadDirConfirmTitle", { name })}
+          </DialogTitle>
+          <DialogDescription className="break-words [overflow-wrap:anywhere]">
+            {t("dataRelay.context.uploadDirConfirmDesc")}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="min-w-0 space-y-1.5 text-xs text-muted-foreground">
+          {hostLabel ? (
+            <div className="flex min-w-0 items-start gap-2">
+              <span className="shrink-0 font-medium text-foreground/80">{t("sftp.deleteConfirm.host")}:</span>
+              <span className="min-w-0 break-words [overflow-wrap:anywhere]">{hostLabel}</span>
+            </div>
+          ) : null}
+          <div className="flex min-w-0 items-start gap-2">
+            <span className="shrink-0 font-medium text-foreground/80">{t("dataRelay.context.uploadDirSource")}:</span>
+            <span className="min-w-0 break-all font-mono [overflow-wrap:anywhere]">{path}</span>
+          </div>
+          {targetPath ? (
+            <div className="flex min-w-0 items-start gap-2">
+              <span className="shrink-0 font-medium text-foreground/80">{t("dataRelay.context.uploadDirTarget")}:</span>
+              <span className="min-w-0 break-all font-mono [overflow-wrap:anywhere]">{targetPath}</span>
+            </div>
+          ) : null}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={uploading} onClick={() => onOpenChange(false)}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            ref={confirmButtonRef}
+            type="button"
+            disabled={uploading}
+            onClick={onConfirm}
+          >
+            {uploading ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Upload size={14} className="mr-2" />}
+            {t("dataRelay.context.uploadDirConfirm")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 export interface NewFolderDialogProps {
   open: boolean;

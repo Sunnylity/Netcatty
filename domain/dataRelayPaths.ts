@@ -39,6 +39,37 @@ export function joinDataRelayPath(base: string, name: string): string {
 }
 
 /**
+ * Mirror one browsed subdirectory's position under its sync root for a
+ * one-shot upload: the relative path inside the source root is replayed under
+ * the destination root; when the panes browsed outside the root the subtree
+ * lands at the destination root's top level.
+ */
+export function dataRelaySubdirUploadRelativeDir(
+  sourceRoot: string,
+  browsePath: string,
+  name: string,
+): string {
+  const root = stripDataRelayTrailingSep(sourceRoot);
+  const browse = stripDataRelayTrailingSep(browsePath);
+  if (root && browse) {
+    if (usesWindowsDataRelayPath(root)) {
+      // Saved rule paths and browsed SFTP paths may mix \ and / on Windows;
+      // compare on normalized forward slashes so both spellings match.
+      const rootNormalized = root.replace(/\\/g, "/").toLowerCase();
+      const browseNormalized = browse.replace(/\\/g, "/");
+      if (browseNormalized.toLowerCase().startsWith(rootNormalized)) {
+        const rel = browseNormalized.slice(rootNormalized.length).replace(/^\/+/, "");
+        return rel ? `${rel}/${name}` : name;
+      }
+    } else if (browse.startsWith(root)) {
+      const rel = browse.slice(root.length).replace(/^\/+/, "");
+      return rel ? `${rel}/${name}` : name;
+    }
+  }
+  return name;
+}
+
+/**
  * When the destination is a directory (trailing slash), write into a file
  * named after the source. Concrete file paths are left unchanged.
  */

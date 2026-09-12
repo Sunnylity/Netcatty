@@ -52,6 +52,7 @@ import {
   PathListDeleteConfirmDialog,
   PathListEntryContextMenu,
   PathListPaneContextMenu,
+  PathListUploadConfirmDialog,
   type PathNameDialogKind,
 } from "./NewFolderDialog";
 import { ScanSettingsPopover } from "./ScanSettingsPopover";
@@ -128,6 +129,8 @@ const ComparePane: React.FC<{
   onPaste: () => void;
   onDelete: (file: DataRelayCompareFile) => void;
   onOpenTerminal?: (file?: DataRelayCompareFile) => void;
+  /** Source pane only: push one subdirectory to the destination (overwrite). */
+  onUploadDir?: (file: DataRelayCompareFile) => void;
 }> = ({
   side,
   title,
@@ -150,6 +153,7 @@ const ComparePane: React.FC<{
   onPaste,
   onDelete,
   onOpenTerminal,
+  onUploadDir,
 }) => {
   const { t } = useI18n();
   const parentPath = getParentPath(pane.path);
@@ -255,6 +259,7 @@ const ComparePane: React.FC<{
                       onNewFile={onNewFile}
                       onDelete={() => onDelete(file)}
                       onOpenTerminal={onOpenTerminal ? () => onOpenTerminal(file) : undefined}
+                      onUploadDir={onUploadDir && isDir(file) ? () => onUploadDir(file) : undefined}
                     >
                       <button
                         type="button"
@@ -332,6 +337,9 @@ export const CompareView: React.FC<CompareViewProps> = ({
     copySelection,
     cancelCompare,
     refreshBoth,
+    uploading,
+    uploadSubdirectory,
+    resolveSubdirUploadTarget,
   } = useDataRelayCompareSession({
     active: true,
     rule,
@@ -356,6 +364,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
     file: DataRelayCompareFile;
   } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [uploadTarget, setUploadTarget] = useState<DataRelayCompareFile | null>(null);
   const [logHeight, setLogHeight, persistLogHeight] = useStoredNumber(
     STORAGE_KEY_DATA_RELAY_COMPARE_LOG_HEIGHT,
     COMPARE_LOG_HEIGHT_DEFAULT,
@@ -523,6 +532,20 @@ export const CompareView: React.FC<CompareViewProps> = ({
     }
   }, [deleteEntries, deleteTarget, t]);
 
+  const uploadTargetPath = uploadTarget ? resolveSubdirUploadTarget(uploadTarget.name) : null;
+  const handleUploadDirConfirm = useCallback(async () => {
+    const target = uploadTarget;
+    if (!target) return;
+    setUploadTarget(null);
+    const result = await uploadSubdirectory(target.name);
+    if (!result) return;
+    if (result.failed > 0) {
+      toast.error(t("dataRelay.context.uploadDirFailed", { count: result.failed }));
+    } else {
+      toast.success(t("dataRelay.context.uploadDirDone", { count: result.copied }));
+    }
+  }, [t, uploadSubdirectory, uploadTarget]);
+
   const handleOpenTerminal = useCallback((side: DataRelayCompareSide, file?: DataRelayCompareFile) => {
     const host = side === "left" ? sourceHost : destHost;
     if (!host || !onOpenTerminalAtPath) return;
@@ -587,7 +610,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           title={t("dataRelay.form.sourceHost")}
           host={sourceHost}
           pane={left}
-          busy={comparing || copying || deleting}
+          busy={comparing || copying || deleting || uploading}
           selectedName={selectedName}
           kindByName={kindByName}
           compared={compared && left.path === resolveDataRelayViewerStart(rule.sourcePath, left.homeDir || "/").listPath}
@@ -604,6 +627,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           onPaste={() => void handlePaste("left")}
           onDelete={(file) => setDeleteTarget({ side: "left", file })}
           onOpenTerminal={onOpenTerminalAtPath ? (file) => handleOpenTerminal("left", file) : undefined}
+          onUploadDir={setUploadTarget}
         />
         <div className="hidden w-6 shrink-0 items-center justify-center md:flex">
           <ArrowLeftRight size={16} className="text-muted-foreground" />
@@ -613,7 +637,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           title={t("dataRelay.form.destHost")}
           host={destHost}
           pane={right}
-          busy={comparing || copying || deleting}
+          busy={comparing || copying || deleting || uploading}
           selectedName={selectedName}
           kindByName={kindByName}
           compared={compared && right.path === resolveDataRelayViewerStart(rule.destPath, right.homeDir || "/").listPath}
@@ -734,6 +758,18 @@ export const CompareView: React.FC<CompareViewProps> = ({
           if (!open) setDeleteTarget(null);
         }}
         onConfirm={() => void handleDeleteConfirm()}
+      />
+
+      <PathListUploadConfirmDialog
+        open={uploadTarget !== null}
+        hostLabel={hostLabel(destHost)}
+        path={uploadTarget ? joinPath(left.path, uploadTarget.name) : ""}
+        targetPath={uploadTargetPath ?? undefined}
+        uploading={uploading}
+        onOpenChange={(open) => {
+          if (!open && !uploading) setUploadTarget(null);
+        }}
+        onConfirm={() => void handleUploadDirConfirm()}
       />
     </div>
   );

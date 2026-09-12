@@ -46,3 +46,17 @@ test("re-opening a rule tab re-anchors the panes to the configured paths", () =>
   assert.match(compareViewSource, /navigate\("left", resolveDataRelayViewerStart\(rule\.sourcePath/);
   assert.match(compareViewSource, /navigate\("right", resolveDataRelayViewerStart\(rule\.destPath/);
 });
+
+test("source-pane directories offer a one-shot overwrite upload to the destination", () => {
+  // Menu item exists, bound to directories on the left pane only.
+  assert.match(
+    readFileSync(new URL("./NewFolderDialog.tsx", import.meta.url), "utf8"),
+    /dataRelay\.context\.uploadDir/,
+  );
+  assert.match(compareViewSource, /onUploadDir=\{setUploadTarget\}/);
+  assert.match(compareViewSource, /onUploadDir && isDir\(file\)/);
+  // The upload walks the subtree and overwrites into the mirrored target.
+  assert.match(compareSessionSource, /collectDataRelayCompareTree\(/);
+  assert.match(compareSessionSource, /dataRelaySubdirUploadRelativeDir\(/);
+  assert.match(compareSessionSource, /Uploading \$\{sourceDir\} -> \$\{targetDir\} \(overwrite\)/);
+});

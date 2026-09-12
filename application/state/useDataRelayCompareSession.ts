@@ -9,9 +9,11 @@ import type {
   TerminalSettings,
 } from "../../domain/models";
 import {
+  collectDataRelayCompareTree,
   compareDataRelayTreesPaired,
   dataRelayCompareCopyDirectionForRow,
   dataRelayCompareKindByFirstSegment,
+  isDataRelayCompareDirectory,
   listDataRelayCompareCopyItems,
   parentDataRelayRelativePath,
   summarizeDataRelayCompare,
@@ -21,7 +23,13 @@ import {
   type DataRelayCompareRow,
   type DataRelayCompareSyncDirection,
 } from "../../domain/dataRelayCompare";
-import { resolveDataRelayViewerStart, stripDataRelayTrailingSep, usesWindowsDataRelayPath } from "../../domain/dataRelayPaths";
+import {
+  dataRelaySubdirUploadRelativeDir,
+  getDataRelayFileName,
+  resolveDataRelayViewerStart,
+  stripDataRelayTrailingSep,
+  usesWindowsDataRelayPath,
+} from "../../domain/dataRelayPaths";
 import { copyRemotePathEntries } from "./sftp/copyRemotePathEntries";
 import {
   getDataRelayPathClipboard,
@@ -29,6 +37,7 @@ import {
   type DataRelayPathClipboardEntry,
 } from "./sftp/dataRelayPathClipboardStore";
 import { getParentPath, isSafeNewFolderName, isWindowsPath, isWindowsRoot, joinPath, joinTransferTargetPath } from "./sftp/utils";
+import { sftpTransferCenterStore } from "./sftpTransferCenterStore";
 import { buildSftpHostCredentials } from "./sftp/useSftpHostCredentials";
 import { useSftpBackend } from "./useSftpBackend";
 
@@ -132,6 +141,7 @@ export function useDataRelayCompareSession({
   const [compared, setCompared] = useState(false);
   const [copying, setCopying] = useState(false);
   const [comparing, setComparing] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [compareProgress, setCompareProgress] = useState<DataRelayCompareProgress | null>(null);
   const [copyProgress, setCopyProgress] = useState<{ done: number; total: number } | null>(null);
   const [summary, setSummary] = useState({ same: 0, leftOnly: 0, rightOnly: 0, different: 0 });
@@ -141,6 +151,7 @@ export function useDataRelayCompareSession({
   const leftGenRef = useRef(0);
   const rightGenRef = useRef(0);
   const compareGenRef = useRef(0);
+  const uploadGenRef = useRef(0);
   const compareProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestCompareProgressRef = useRef<DataRelayCompareProgress | null>(null);
   const leftRef = useRef(left);
@@ -535,6 +546,151 @@ export function useDataRelayCompareSession({
     }
   }, [appendLog, compared, copyOneDirection, refreshBoth, rows, runCompare]);
 
+  /** Resolve where a one-shot subdirectory upload would land, for confirm UI. */
+  const resolveSubdirUploadTarget = useCallback((name: string): string | null => {
+    if (!leftRef.current.ready || !rightRef.current.ready) return null;
+    const leftRoot = resolveDataRelayViewerStart(rule.sourcePath, leftRef.current.homeDir || "/").listPath;
+    const rightRoot = resolveDataRelayViewerStart(rule.destPath, rightRef.current.homeDir || "/").listPath;
+    const relDir = dataRelaySubdirUploadRelativeDir(leftRoot, leftRef.current.path, name);
+    return joinTransferTargetPath(rightRoot, relDir);
+  }, [rule.destPath, rule.sourcePath]);
+
+  /**
+   * Push one source subdirectory to the destination, overwriting every file
+   * and subdirectory under it. Scope mirrors the subdirectory's position under
+   * the sync roots; each file lands in the transfer panel like scan copies.
+   */
+  const uploadSubdirectory = useCallback(async (
+    name: string,
+  ): Promise<{ copied: number; failed: number } | null> => {
+    const leftSftpId = leftSftpRef.current;
+    const rightSftpId = rightSftpRef.current;
+    if (!leftSftpId || !rightSftpId || !leftRef.current.ready || !rightRef.current.ready) return null;
+    const leftRoot = resolveDataRelayViewerStart(rule.sourcePath, leftRef.current.homeDir || "/").listPath;
+    const rightRoot = resolveDataRelayViewerStart(rule.destPath, rightRef.current.homeDir || "/").listPath;
+    const relDir = dataRelaySubdirUploadRelativeDir(leftRoot, leftRef.current.path, name);
+    const sourceDir = joinTransferTargetPath(leftRoot, relDir);
+    const targetDir = joinTransferTargetPath(rightRoot, relDir);
+
+    const gen = ++uploadGenRef.current;
+    const cancelled = () => uploadGenRef.current !== gen;
+    setUploading(true);
+    appendLog(`Uploading ${sourceDir} -> ${targetDir} (overwrite)`);
+    try {
+      const tree = await collectDataRelayCompareTree(
+        sourceDir,
+        (path) => listTreePath(leftSftpId, path),
+        { joinAbsolute: joinPath, cancelled },
+      );
+      if (cancelled()) return null;
+      const entries = [...tree.entries].sort((a, b) => {
+        const aDepth = a.relativePath.split("/").length;
+        const bDepth = b.relativePath.split("/").length;
+        return aDepth !== bDepth ? aDepth - bDepth : a.relativePath.localeCompare(b.relativePath);
+      });
+      let copied = 0;
+      let failed = 0;
+      try { await mkdirSftp(rightSftpId, targetDir); } catch { /* may already exist */ }
+      for (const entry of entries) {
+        if (cancelled()) return null;
+        if (isDataRelayCompareDirectory(entry)) {
+          try { await mkdirSftp(rightSftpId, joinTransferTargetPath(targetDir, entry.relativePath)); } catch { /* may already exist */ }
+          continue;
+        }
+        if (entry.type === "symlink" && entry.linkTarget !== "file") continue;
+        const sourceAbs = joinTransferTargetPath(sourceDir, entry.relativePath);
+        const targetAbs = joinTransferTargetPath(targetDir, entry.relativePath);
+        const transferId = `relay-upload-${rule.id}-${Date.now()}-${entry.relativePath}`;
+        sftpTransferCenterStore.upsertTasks([{
+          id: transferId,
+          fileName: getDataRelayFileName(entry.relativePath),
+          sourcePath: sourceAbs,
+          targetPath: targetAbs,
+          sourceConnectionId: leftSftpId,
+          targetConnectionId: rightSftpId,
+          sourceHostId: rule.sourceHostId,
+          targetHostId: rule.destHostId,
+          sourceHostLabel: sourceHost?.label,
+          targetHostLabel: destHost?.label,
+          direction: "remote-to-remote",
+          status: "queued",
+          totalBytes: entry.size,
+          transferredBytes: 0,
+          speed: 0,
+          startTime: Date.now(),
+          isDirectory: false,
+          sourceLastModified: entry.lastModified,
+          retryable: false,
+        }]);
+        try {
+          const result = await startStreamTransfer({
+            transferId,
+            sourcePath: sourceAbs,
+            targetPath: targetAbs,
+            sourceType: "sftp",
+            targetType: "sftp",
+            sourceSftpId: leftSftpId,
+            targetSftpId: rightSftpId,
+            sourceHostId: rule.sourceHostId,
+            targetHostId: rule.destHostId,
+            totalBytes: entry.size,
+            sourceLastModified: entry.lastModified,
+            skipAdmission: true,
+          });
+          if (result?.error || result?.cancelled) {
+            sftpTransferCenterStore.patchTask(transferId, {
+              status: result?.cancelled ? "cancelled" : "failed",
+              error: result?.error || undefined,
+              endTime: Date.now(),
+              speed: 0,
+            });
+            failed += 1;
+            continue;
+          }
+          sftpTransferCenterStore.patchTask(transferId, {
+            status: "completed",
+            transferredBytes: entry.size,
+            endTime: Date.now(),
+            speed: 0,
+          });
+          copied += 1;
+        } catch {
+          sftpTransferCenterStore.patchTask(transferId, {
+            status: "failed",
+            endTime: Date.now(),
+            speed: 0,
+          });
+          failed += 1;
+        }
+      }
+      if (cancelled()) return null;
+      appendLog(
+        `Uploaded ${copied} file(s)${failed > 0 ? `, ${failed} failed` : ""} -> ${targetDir}`,
+        failed > 0 ? "error" : "success",
+      );
+      await refreshBoth();
+      return { copied, failed };
+    } catch (err) {
+      appendLog(`Upload failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+      return { copied: 0, failed: 1 };
+    } finally {
+      if (uploadGenRef.current === gen) setUploading(false);
+    }
+  }, [
+    appendLog,
+    destHost,
+    listTreePath,
+    mkdirSftp,
+    refreshBoth,
+    rule.destHostId,
+    rule.destPath,
+    rule.id,
+    rule.sourceHostId,
+    rule.sourcePath,
+    sourceHost,
+    startStreamTransfer,
+  ]);
+
   const openEntry = useCallback((side: DataRelayCompareSide, file: DataRelayCompareFile) => {
     if (!isDir(file)) {
       setSelectedName(file.name);
@@ -741,6 +897,9 @@ export function useDataRelayCompareSession({
     cancelCompare,
     copySelection,
     refreshBoth,
+    uploading,
+    uploadSubdirectory,
+    resolveSubdirUploadTarget,
   };
 }
 
