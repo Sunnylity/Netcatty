@@ -1347,6 +1347,38 @@ function createPreloadApi(ctx) {
       portForwardRuntimeListeners.delete(cb);
     };
   },
+
+  // Data Relay API
+  startDataRelay: async (options) => {
+    return ipcRenderer.invoke("netcatty:datarelay:start", options);
+  },
+  stopDataRelay: async (relayId) => {
+    return ipcRenderer.invoke("netcatty:datarelay:stop", { relayId });
+  },
+  getDataRelayStatus: async (relayId) => {
+    return ipcRenderer.invoke("netcatty:datarelay:status", { relayId });
+  },
+  getDataRelaySnapshot: async () => {
+    return ipcRenderer.invoke("netcatty:datarelay:snapshot");
+  },
+  stopAllDataRelays: async () => {
+    return ipcRenderer.invoke("netcatty:datarelay:stopAll");
+  },
+  stopDataRelayByRuleId: async (ruleId) => {
+    return ipcRenderer.invoke("netcatty:datarelay:stopByRuleId", { ruleId });
+  },
+  subscribeDataRelayRuntime: async () => {
+    return ipcRenderer.invoke("netcatty:datarelay:subscribeRuntime");
+  },
+  unsubscribeDataRelayRuntime: async () => {
+    return ipcRenderer.invoke("netcatty:datarelay:unsubscribeRuntime");
+  },
+  onDataRelayRuntime: (cb) => {
+    dataRelayRuntimeListeners.add(cb);
+    return () => {
+      dataRelayRuntimeListeners.delete(cb);
+    };
+  },
   // Chain progress listener for jump host connections
   onChainProgress: (cb) => {
     const id = randomUUID();

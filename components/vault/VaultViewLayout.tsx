@@ -260,6 +260,8 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
     Plug,
     Plus,
     PortForwarding,
+    DataRelay,
+    Waypoints,
     protocolSelectHost,
     proxyProfiles,
     ProxyProfilesManager,
@@ -665,6 +667,30 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
               {sidebarCollapsed && (
                 <TooltipContent side="right">
                   {t("vault.nav.portForwarding")}
+                </TooltipContent>
+              )}
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <RippleButton
+                  variant={currentSection === "relay" ? "secondary" : "ghost"}
+                  className={cn(
+                    "w-full h-10",
+                    sidebarCollapsed
+                      ? "justify-center p-0"
+                      : "justify-start gap-3",
+                    currentSection === "relay" &&
+                      "bg-foreground/10 text-foreground hover:bg-foreground/15 border-border/40",
+                  )}
+                  onClick={() => setCurrentSection("relay")}
+                >
+                  <Waypoints size={16} className="flex-shrink-0" />
+                  {!sidebarCollapsed && t("vault.nav.dataRelay")}
+                </RippleButton>
+              </TooltipTrigger>
+              {sidebarCollapsed && (
+                <TooltipContent side="right">
+                  {t("vault.nav.dataRelay")}
                 </TooltipContent>
               )}
             </Tooltip>
@@ -1374,6 +1400,19 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
                         Array.from(new Set([...customGroups, groupPath])),
                       )
                     }
+                    terminalSettings={terminalSettings}
+                  />
+                </Suspense>
+              </LazyLoadBoundary>
+            )}
+            {currentSection === "relay" && (
+              <LazyLoadBoundary name="Data relay" resetKey="data-relay">
+                <Suspense fallback={<VaultSectionLoading />}>
+                  <DataRelay
+                    hosts={hosts}
+                    keys={keys}
+                    identities={identities}
+                    knownHosts={knownHosts}
                     terminalSettings={terminalSettings}
                   />
                 </Suspense>

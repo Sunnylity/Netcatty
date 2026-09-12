@@ -145,6 +145,17 @@ declare global {
     onPortForwardStatus?(tunnelId: string, cb: PortForwardStatusCallback): () => void;
     onPortForwardRuntime?(cb: PortForwardRuntimeEventCallback): () => void;
 
+    // Data Relay
+    startDataRelay?(options: DataRelayOptions): Promise<DataRelayResult>;
+    stopDataRelay?(relayId: string): Promise<DataRelayResult>;
+    getDataRelayStatus?(relayId: string): Promise<DataRelayStatusResult>;
+    getDataRelaySnapshot?(): Promise<DataRelayRuntimeSnapshot>;
+    subscribeDataRelayRuntime?(): Promise<DataRelayRuntimeSnapshot>;
+    unsubscribeDataRelayRuntime?(): Promise<{ ok: boolean }>;
+    stopAllDataRelays?(): Promise<{ stopped: number; failed: number }>;
+    stopDataRelayByRuleId?(ruleId: string): Promise<{ stopped: number; failed: number }>;
+    onDataRelayRuntime?(cb: DataRelayRuntimeEventCallback): () => void;
+
     // Known Hosts
     readKnownHosts?(): Promise<string | null>;
 

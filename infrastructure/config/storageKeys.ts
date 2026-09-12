@@ -34,6 +34,11 @@ export const STORAGE_KEY_PORT_FORWARDING = 'netcatty_port_forwarding_v1';
 export const STORAGE_KEY_PORT_FORWARDING_PANEL_WIDTH = 'netcatty_port_forwarding_panel_width_v1';
 export const STORAGE_KEY_PF_PREFER_FORM_MODE = 'netcatty_pf_prefer_form_mode_v1';
 export const STORAGE_KEY_PF_VIEW_MODE = 'netcatty_pf_view_mode_v1';
+// Data Relay (source command stream -> destination file over SFTP)
+export const STORAGE_KEY_DATA_RELAY = 'netcatty_data_relay_v1';
+/** Width (px) shared by data relay edit / new panels. */
+export const STORAGE_KEY_DATA_RELAY_PANEL_WIDTH = 'netcatty_data_relay_panel_width_v1';
+export const STORAGE_KEY_DATA_RELAY_VIEW_MODE = 'netcatty_data_relay_view_mode_v1';
 export const STORAGE_KEY_KNOWN_HOSTS = 'netcatty_known_hosts_v1';
 export const STORAGE_KEY_SHELL_HISTORY = 'netcatty_shell_history_v1';
 export const STORAGE_KEY_CONNECTION_LOGS = 'netcatty_connection_logs_v1';

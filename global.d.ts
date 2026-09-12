@@ -116,6 +116,11 @@ declare global {
     charset?: string;
     extraArgs?: string[];
     startupCommand?: string;
+    /**
+     * Remote program to run instead of the server's default interactive shell.
+     * Opens the session channel with `exec` + PTY rather than `shell`.
+     */
+    remoteShellCommand?: string;
     passphrase?: string;
     knownHosts?: import("./domain/models").KnownHost[];
     verifyHostKeys?: boolean;
@@ -299,6 +304,87 @@ declare global {
 
   type PortForwardStatusCallback = (status: 'inactive' | 'connecting' | 'active' | 'error', error?: string) => void;
   type PortForwardRuntimeEventCallback = (event: PortForwardRuntimeEvent) => void;
+
+  // Data Relay Types
+  /**
+   * SSH connection parameters for one end of a data relay. Shares the port
+   * forwarding connection shape minus the listener/target fields that only
+   * make sense for a forwarded socket.
+   */
+  type DataRelayEndpointOptions = Omit<
+    PortForwardOptions,
+    'ruleId' | 'tunnelId' | 'type' | 'localPort' | 'bindAddress' | 'remoteHost' | 'remotePort'
+  >;
+
+  interface DataRelayOptions {
+    ruleId?: string;
+    relayId: string;
+    /** Source host: runs `sourceCommand` and streams its stdout. */
+    source: DataRelayEndpointOptions;
+    /** Destination host: receives the stream into `destPath`. */
+    destination: DataRelayEndpointOptions;
+    sourceCommand: string;
+    destPath: string;
+    writeMode?: 'overwrite' | 'append';
+    knownHosts?: import("./domain/models").KnownHost[];
+    verifyHostKeys?: boolean;
+  }
+
+  interface DataRelayResult {
+    relayId: string;
+    success: boolean;
+    cancelled?: boolean;
+    reused?: boolean;
+    status?: 'inactive' | 'connecting' | 'active' | 'error';
+    error?: string;
+  }
+
+  interface DataRelayStatusResult {
+    relayId: string;
+    status: 'inactive' | 'connecting' | 'active' | 'error';
+    error?: string;
+    bytesTransferred?: number;
+  }
+
+  type DataRelayRuntimePhase =
+    | 'connecting'
+    | 'active'
+    | 'stopping'
+    | 'error'
+    | 'inactive';
+
+  interface DataRelayRuntimeRecord {
+    ruleId?: string;
+    relayId: string;
+    phase: DataRelayRuntimePhase | string;
+    error?: string;
+    bytesTransferred?: number;
+    revision: number;
+    updatedAt: number;
+  }
+
+  interface DataRelayRuntimeSnapshot {
+    epoch: string;
+    revision: number;
+    records: DataRelayRuntimeRecord[];
+  }
+
+  type DataRelayRuntimeEvent =
+    | {
+        epoch: string;
+        revision: number;
+        kind: 'upsert';
+        record: DataRelayRuntimeRecord;
+      }
+    | {
+        epoch: string;
+        revision: number;
+        kind: 'remove';
+        relayId: string;
+        ruleId?: string;
+      };
+
+  type DataRelayRuntimeEventCallback = (event: DataRelayRuntimeEvent) => void;
 
   interface NetcattyPluginRuntimeStatus {
     available: boolean;

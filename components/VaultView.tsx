@@ -29,6 +29,7 @@ import {
   Trash2,
   Upload,
   Usb,
+  Waypoints,
   X,
   Zap,
 } from "lucide-react";
@@ -161,6 +162,7 @@ const LazyProtocolSelectDialog = lazy(() => import("./ProtocolSelectDialog"));
 const LazyConnectionLogsManager = lazy(() => import("./ConnectionLogsManager"));
 const KeychainManager = lazy(() => import("./KeychainManager"));
 const PortForwarding = lazy(() => import("./PortForwardingNew"));
+const DataRelay = lazy(() => import("./DataRelayNew"));
 const ProxyProfilesManager = lazy(() => import("./ProxyProfilesManager"));
 const SnippetsManager = lazy(() => import("./SnippetsManager"));
 
@@ -171,6 +173,7 @@ export type VaultSection =
   | "snippets"
   | "notes"
   | "port"
+  | "relay"
   | "knownhosts"
   | "logs";
 
@@ -1529,6 +1532,8 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
           Plug,
           Plus,
           PortForwarding,
+          DataRelay,
+          Waypoints,
           protocolSelectHost,
           proxyProfiles,
           ProxyProfilesManager,

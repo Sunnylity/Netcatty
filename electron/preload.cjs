@@ -765,6 +765,8 @@ ipcRenderer.on("netcatty:plugins:contributions-changed", (_event, payload) => {
 // Port forwarding status listeners
 const portForwardStatusListeners = new Map();
 const portForwardRuntimeListeners = new Set();
+// Data relay runtime listeners
+const dataRelayRuntimeListeners = new Set();
 
 ipcRenderer.on("netcatty:portforward:status", (_event, payload) => {
   const { tunnelId, status, error } = payload;
@@ -786,6 +788,16 @@ ipcRenderer.on("netcatty:portforward:runtime", (_event, payload) => {
       cb(payload);
     } catch (err) {
       console.error("Port forward runtime callback failed", err);
+    }
+  });
+});
+
+ipcRenderer.on("netcatty:datarelay:runtime", (_event, payload) => {
+  dataRelayRuntimeListeners.forEach((cb) => {
+    try {
+      cb(payload);
+    } catch (err) {
+      console.error("Data relay runtime callback failed", err);
     }
   });
 });
@@ -879,6 +891,7 @@ const api = createPreloadApi({
   terminalPopupConfigState,
   portForwardStatusListeners,
   portForwardRuntimeListeners,
+  dataRelayRuntimeListeners,
   fileWatchSyncedListeners,
   fileWatchErrorListeners,
   fileWatchStoppedListeners,

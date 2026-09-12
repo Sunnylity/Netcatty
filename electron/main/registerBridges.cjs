@@ -87,6 +87,7 @@ function createBridgeRegistrar(context) {
     localFsBridge,
     transferBridge,
     portForwardingBridge,
+    dataRelayBridge,
     terminalBridge,
     crashLogBridge,
     ptyProcessTree,
@@ -461,6 +462,7 @@ function createBridgeRegistrar(context) {
     localFsBridge.registerHandlers(ipcMain);
     transferBridge.registerHandlers(ipcMain, { terminalWorkerManager });
     portForwardingBridge.registerHandlers(ipcMain, { terminalWorkerManager });
+    dataRelayBridge.registerHandlers(ipcMain);
     terminalBridge.registerHandlers(ipcMain, { terminalWorkerManager });
 
     const scriptBridge = require("../bridges/scriptBridge.cjs");

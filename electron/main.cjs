@@ -164,6 +164,7 @@ const sftpBridge = require("./bridges/sftpBridge.cjs");
 const localFsBridge = require("./bridges/localFsBridge.cjs");
 const transferBridge = require("./bridges/transferBridge.cjs");
 const portForwardingBridge = require("./bridges/portForwardingBridge.cjs");
+const dataRelayBridge = require("./bridges/dataRelayBridge.cjs");
 const terminalBridge = require("./bridges/terminalBridge.cjs");
 const sessionLogStreamManager = require("./bridges/sessionLogStreamManager.cjs");
 // crashLogBridge is required at the top of the file (before error handlers)
@@ -548,6 +549,7 @@ const registerBridges = createBridgeRegistrar({
   localFsBridge,
   transferBridge,
   portForwardingBridge,
+  dataRelayBridge,
   terminalBridge,
   crashLogBridge,
   ptyProcessTree,
@@ -1701,6 +1703,11 @@ if (!gotLock) {
       portForwardingBridge.stopAllPortForwards();
     } catch (err) {
       console.warn("Error during port forwarding cleanup:", err);
+    }
+    try {
+      dataRelayBridge.stopAllDataRelays();
+    } catch (err) {
+      console.warn("Error during data relay cleanup:", err);
     }
     try {
       getGlobalShortcutBridge().cleanup();

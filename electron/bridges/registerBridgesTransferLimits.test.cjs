@@ -86,6 +86,7 @@ function createBridgeRegistrarForTest({
     localFsBridge: noopBridge,
     transferBridge,
     portForwardingBridge: noopBridge,
+    dataRelayBridge: noopBridge,
     terminalBridge: { ...noopBridge, execOnEtSession() {} },
     crashLogBridge: noopBridge,
     ptyProcessTree: { getChildProcesses: () => [] },
