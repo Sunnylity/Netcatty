@@ -42,6 +42,10 @@ export const HostKeywordHighlightPopover: React.FC<HostKeywordHighlightPopoverPr
   const [newRulePattern, setNewRulePattern] = useState('');
   const [newRuleColor, setNewRuleColor] = useState(DEFAULT_NEW_RULE_COLOR);
   const [patternError, setPatternError] = useState<string | null>(null);
+  // Tooltip open must stay a boolean for the component's whole lifetime;
+  // switching `open` between undefined and false trips Radix's
+  // uncontrolled→controlled warning.
+  const [tooltipOpen, setTooltipOpen] = useState(false);
 
   const rules = useMemo(() => host?.keywordHighlightRules ?? [], [host?.keywordHighlightRules]);
   const enabled = host?.keywordHighlightEnabled ?? false;
@@ -128,7 +132,7 @@ export const HostKeywordHighlightPopover: React.FC<HostKeywordHighlightPopoverPr
       {/* Force-close tooltip while the panel is open so the blue label does not
           sit on top of the trigger/panel (especially in the compact top-right
           cluster when the host info bar is hidden). */}
-      <Tooltip open={isOpen ? false : undefined}>
+      <Tooltip open={isOpen ? false : tooltipOpen} onOpenChange={setTooltipOpen}>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
             <Button

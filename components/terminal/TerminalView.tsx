@@ -429,6 +429,10 @@ function TerminalViewInner({ ctx, isPaneMagnified = false }: { ctx: TerminalView
   });
 
   const [compactActionsOpen, setCompactActionsOpen] = useState(false);
+  // Tooltip open must stay a boolean for the component's whole lifetime;
+  // switching `open` between undefined and false trips Radix's
+  // uncontrolled→controlled warning.
+  const [compactActionsTooltipOpen, setCompactActionsTooltipOpen] = useState(false);
   const compactActionsRef = useRef<HTMLDivElement | null>(null);
   const compactActionsButtonRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
@@ -935,7 +939,7 @@ function TerminalViewInner({ ctx, isPaneMagnified = false }: { ctx: TerminalView
                   className="absolute right-1 top-1 z-30 flex flex-row-reverse items-center pointer-events-none"
                   data-section="terminal-toolbar"
                 >
-                  <Tooltip open={compactActionsOpen ? false : undefined}>
+                  <Tooltip open={compactActionsOpen ? false : compactActionsTooltipOpen} onOpenChange={setCompactActionsTooltipOpen}>
                     <TooltipTrigger asChild>
                       <button
                         ref={compactActionsButtonRef}
