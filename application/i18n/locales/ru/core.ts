@@ -1033,6 +1033,8 @@ export const ruCoreMessages: Messages = {
   'dataRelay.browser.home': 'Домашняя папка',
   'dataRelay.compare.openHint': 'Дважды щёлкните, чтобы открыть в новой вкладке',
   'dataRelay.compare.run': 'Сравнить',
+  'dataRelay.compare.savePaths': 'Сохранить папки синхронизации',
+  'dataRelay.compare.pathsSaved': 'Папки синхронизации обновлены',
   'dataRelay.compare.copyToDest': 'Копировать в назначение',
   'dataRelay.compare.copyToSource': 'Копировать в источник',
   'dataRelay.compare.syncInfo': 'Синхронизация',

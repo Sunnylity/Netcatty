@@ -686,6 +686,8 @@ export const zhCNCoreMessages: Messages = {
   'dataRelay.browser.home': '主目录',
   'dataRelay.compare.openHint': '双击在新标签页中打开',
   'dataRelay.compare.run': '比较',
+  'dataRelay.compare.savePaths': '保存同步路径',
+  'dataRelay.compare.pathsSaved': '同步路径已更新',
   'dataRelay.compare.copyToDest': '复制到目标',
   'dataRelay.compare.copyToSource': '复制到源',
   'dataRelay.compare.syncInfo': '同步信息',

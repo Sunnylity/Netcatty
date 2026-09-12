@@ -115,6 +115,7 @@ export const useDataRelayState = ({
 
   /** Persist configuration only; runtime phases are never durable. */
   const commitRules = useCallback((next: DataRelayRule[]) => {
+    rulesRef.current = next;
     setRules(next);
     localStorageAdapter.write(STORAGE_KEY_DATA_RELAY, toPersistedDataRelayRules(next));
   }, []);

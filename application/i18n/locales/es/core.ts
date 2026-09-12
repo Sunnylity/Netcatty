@@ -1008,6 +1008,8 @@ Resalta el panel dividido enfocado:
   'dataRelay.browser.home': 'Inicio',
   'dataRelay.compare.openHint': 'Doble clic para abrir en una pestaña nueva',
   'dataRelay.compare.run': 'Comparar',
+  'dataRelay.compare.savePaths': 'Guardar carpetas de sincronización',
+  'dataRelay.compare.pathsSaved': 'Carpetas de sincronización actualizadas',
   'dataRelay.compare.copyToDest': 'Copiar al destino',
   'dataRelay.compare.copyToSource': 'Copiar al origen',
   'dataRelay.compare.syncInfo': 'Sincronización',

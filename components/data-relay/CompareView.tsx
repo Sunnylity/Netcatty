@@ -10,6 +10,7 @@ import {
   GripHorizontal,
   Play,
   RefreshCw,
+  Save,
   Square,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -32,6 +33,7 @@ import {
   joinPath,
 } from "../../application/state/sftp/utils";
 import type { DataRelayCompareFile, DataRelayCompareKind } from "../../domain/dataRelayCompare";
+import { buildDataRelayBrowsePathUpdate } from "../../domain/dataRelayPaths";
 import type { DataRelayRule, Host, Identity, KnownHost, SSHKey, TerminalSettings } from "../../domain/models";
 import { cn } from "../../lib/utils";
 import { SftpBreadcrumb } from "../sftp/SftpBreadcrumb";
@@ -72,7 +74,10 @@ export interface CompareViewProps {
   onStop: () => void;
   onScanSettingsChange: (updates: Partial<DataRelayRule> & { scanCheckpoint?: DataRelayRule["scanCheckpoint"] | null }) => void;
   onOpenTerminalAtPath?: (host: Host, path: string) => void;
-  onPersistBrowsePaths?: (paths: { sourcePath?: string; destPath?: string }) => void;
+  onPersistBrowsePaths?: (
+    paths: { sourcePath?: string; destPath?: string },
+    options?: { preserveRuntime?: boolean },
+  ) => boolean | void;
 }
 
 const COMPARE_LOG_HEIGHT_MIN = 80;
@@ -396,21 +401,43 @@ export const CompareView: React.FC<CompareViewProps> = ({
     document.body.style.userSelect = "none";
   }, [logHeight]);
 
-  const persistBrowsePaths = useCallback(() => {
-    if (!onPersistBrowsePaths) return;
-    onPersistBrowsePaths({
+  const persistBrowsePaths = useCallback((options?: { preserveRuntime?: boolean }) => {
+    if (!onPersistBrowsePaths) return true;
+    if (!left.ready && !right.ready) return true;
+    return onPersistBrowsePaths({
       sourcePath: left.ready ? left.path : undefined,
       destPath: right.ready ? right.path : undefined,
-    });
+    }, options) !== false;
   }, [left.path, left.ready, onPersistBrowsePaths, right.path, right.ready]);
   const persistBrowsePathsRef = useRef(persistBrowsePaths);
   persistBrowsePathsRef.current = persistBrowsePaths;
+  const runningRef = useRef(running);
+  runningRef.current = running;
+
+  const browsePathUpdate = left.ready || right.ready
+    ? buildDataRelayBrowsePathUpdate(rule, {
+      sourcePath: left.ready ? left.path : undefined,
+      destPath: right.ready ? right.path : undefined,
+    })
+    : null;
+  const pathsDirty = Boolean(browsePathUpdate);
 
   useEffect(() => {
     return () => {
-      persistBrowsePathsRef.current();
+      if (runningRef.current) return;
+      persistBrowsePathsRef.current({ preserveRuntime: true });
     };
   }, []);
+
+  const handleSaveSyncPaths = useCallback(() => {
+    if (!persistBrowsePaths({ preserveRuntime: false })) return;
+    toast.success(t("dataRelay.compare.pathsSaved"));
+  }, [persistBrowsePaths, t]);
+
+  const handleStart = useCallback(() => {
+    if (!persistBrowsePaths({ preserveRuntime: false })) return;
+    onStart();
+  }, [onStart, persistBrowsePaths]);
 
   const copyPathToClipboard = useCallback(async (path: string) => {
     try {
@@ -541,12 +568,23 @@ export const CompareView: React.FC<CompareViewProps> = ({
           <Pencil size={14} />
         </Button>
         <ScanSettingsPopover rule={rule} onChange={onScanSettingsChange} />
+        <Button
+          type="button"
+          variant={pathsDirty ? "outline" : "ghost"}
+          size="icon"
+          className="h-8 w-8"
+          disabled={!pathsDirty || running || comparing || copying || (!left.ready && !right.ready)}
+          onClick={handleSaveSyncPaths}
+          title={t("dataRelay.compare.savePaths")}
+        >
+          <Save size={14} />
+        </Button>
         {running ? (
           <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={onStop} title={t("action.stop")}>
             <Square size={13} className="fill-current" />
           </Button>
         ) : (
-          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={onStart} title={t("action.start")}>
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={handleStart} title={t("action.start")}>
             <Play size={14} />
           </Button>
         )}

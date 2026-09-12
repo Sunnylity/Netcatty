@@ -51,12 +51,21 @@ export const DataRelayRuleTabView: React.FC<DataRelayRuleTabViewProps> = ({
     return map;
   }, [hosts]);
 
-  const persistBrowsePaths = useCallback((paths: { sourcePath?: string; destPath?: string }) => {
-    if (!relay || !rule) return;
+  const persistBrowsePaths = useCallback((
+    paths: { sourcePath?: string; destPath?: string },
+    options?: { preserveRuntime?: boolean },
+  ) => {
+    if (!relay || !rule) return false;
     const update = buildDataRelayBrowsePathUpdate(rule, paths);
-    if (!update) return;
-    const result = relay.updateRule(rule.id, update, { preserveRuntime: true });
-    if (!result.ok && result.error) toast.error(result.error);
+    if (!update) return true;
+    const result = relay.updateRule(rule.id, update, {
+      preserveRuntime: options?.preserveRuntime === true,
+    });
+    if (!result.ok && result.error) {
+      toast.error(result.error);
+      return false;
+    }
+    return result.ok;
   }, [relay, rule]);
 
   const persistScanSettings = useCallback((
