@@ -1,9 +1,10 @@
-import { ArrowRight, Loader2, Play, Square, Terminal } from 'lucide-react';
+import { ArrowRight, Loader2, Pencil, Play, Square, Terminal } from 'lucide-react';
 import React from 'react';
 import { useI18n } from '../../application/i18n/I18nProvider';
 import { DataRelayRule, Host } from '../../domain/models';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
+import { ScanSettingsPopover } from './ScanSettingsPopover';
 import {
   formatRelayBytes,
   getRelayStatusLabelKey,
@@ -19,6 +20,8 @@ export interface RuleCardProps {
   onStart: () => void;
   onStop: () => void;
   onEdit: () => void;
+  onOpen: () => void;
+  onScanSettingsChange: (updates: Partial<DataRelayRule> & { scanCheckpoint?: DataRelayRule['scanCheckpoint'] | null }) => void;
 }
 
 const hostLabel = (host?: Host): string => host?.label || host?.hostname || '—';
@@ -30,17 +33,24 @@ export const RuleCard: React.FC<RuleCardProps> = ({
   onStart,
   onStop,
   onEdit,
+  onOpen,
+  onScanSettingsChange,
 }) => {
   const { t } = useI18n();
   const running = isRelayRuleRunning(rule);
   const connecting = rule.status === 'connecting';
 
   return (
-    <button
-      type="button"
-      onClick={onEdit}
+    <div
+      role="button"
+      tabIndex={0}
+      onDoubleClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') onOpen();
+      }}
+      title={t('dataRelay.compare.openHint')}
       className={cn(
-        'group w-full rounded-xl border border-border/60 bg-card p-4 text-left transition-colors hover:border-border hover:bg-foreground/5',
+        'group w-full cursor-pointer rounded-xl border border-border/60 bg-card p-4 text-left transition-colors hover:border-border hover:bg-foreground/5',
         rule.status === 'error' && 'border-destructive/40',
       )}
     >
@@ -63,14 +73,15 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             <span className="truncate font-mono">{hostLabel(sourceHost)}</span>
             <ArrowRight size={12} className="shrink-0 opacity-60" />
             <span className="truncate font-mono">{hostLabel(destHost)}</span>
-            <span className="truncate font-mono">:{rule.destPath}</span>
             <span className="rounded bg-muted px-1.5 py-0.5">
               {t(getRelayWriteModeLabelKey(rule.writeMode))}
             </span>
           </div>
 
           <div className="mt-1.5 truncate font-mono text-[11px] text-muted-foreground/80">
-            $ {rule.sourceCommand}
+            {rule.sourcePath || rule.sourceCommand}
+            <span className="mx-1 opacity-60">-&gt;</span>
+            {rule.destPath}
           </div>
 
           {(rule.bytesTransferred ?? 0) > 0 && (
@@ -85,6 +96,19 @@ export const RuleCard: React.FC<RuleCardProps> = ({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title={t('action.edit')}
+            onClick={(event) => {
+              event.stopPropagation();
+              onEdit();
+            }}
+          >
+            <Pencil size={14} />
+          </Button>
+          <ScanSettingsPopover rule={rule} onChange={onScanSettingsChange} />
           {running ? (
             <Button
               variant="ghost"
@@ -118,6 +142,6 @@ export const RuleCard: React.FC<RuleCardProps> = ({
           )}
         </div>
       </div>
-    </button>
+    </div>
   );
 };

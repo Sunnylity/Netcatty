@@ -29,6 +29,7 @@ import {
 } from '../../domain/proxyProfiles';
 import { isEncryptedCredentialPlaceholder, sanitizeCredentialValue } from '../../domain/credentials';
 import { logger } from '../../lib/logger';
+import { resolveDataRelayDestPath } from '../../domain/dataRelayPaths';
 import { netcattyBridge } from './netcattyBridge';
 
 const FALLBACK_TERMINAL_SETTINGS = {
@@ -260,7 +261,7 @@ export const startDataRelay = async (
       source,
       destination,
       sourceCommand: rule.sourceCommand,
-      destPath: rule.destPath,
+      destPath: resolveDataRelayDestPath(rule.sourcePath ?? '', rule.destPath),
       writeMode: rule.writeMode,
       knownHosts,
       verifyHostKeys: globalTerminalSettings.verifyHostKeys,

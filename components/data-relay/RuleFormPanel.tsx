@@ -1,7 +1,14 @@
-import { Copy, Trash2 } from 'lucide-react';
-import React from 'react';
+import { Copy, FolderOpen, Trash2 } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
 import { useI18n } from '../../application/i18n/I18nProvider';
-import { DataRelayRule, Host } from '../../domain/models';
+import { resolveHostOs } from '../../domain/host';
+import {
+  buildDataRelayFollowCommand,
+} from '../../domain/dataRelayPaths';
+import {
+  DataRelayRule,
+  Host,
+} from '../../domain/models';
 import {
   AsideActionMenu,
   AsideActionMenuItem,
@@ -14,12 +21,14 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Switch } from '../ui/switch';
-import { Textarea } from '../ui/textarea';
+import {
+  RemotePathBrowserDialog,
+  type RemotePathBrowserHostContext,
+} from './RemotePathBrowserDialog';
 
-export interface RuleFormPanelProps {
+export interface RuleFormPanelProps extends RemotePathBrowserHostContext {
   mode: 'new' | 'edit';
   draft: Partial<DataRelayRule>;
-  hosts: Host[];
   onChange: (updates: Partial<DataRelayRule>) => void;
   onSave: () => void;
   onClose: () => void;
@@ -33,13 +42,17 @@ const isRelayCapableHost = (host: Host): boolean => !host.protocol || host.proto
 const hostName = (host: Host): string => host.label || host.hostname;
 
 /**
- * Shared create/edit form for a data relay rule: source host + command,
- * destination host + file, write mode and auto-start.
+ * Shared create/edit form for a data relay rule: source host + path,
+ * destination host + path, write mode and auto-start.
  */
 export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
   mode,
   draft,
   hosts,
+  keys,
+  identities,
+  knownHosts,
+  terminalSettings,
   onChange,
   onSave,
   onClose,
@@ -49,6 +62,28 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
 }) => {
   const { t } = useI18n();
   const sshHosts = hosts.filter(isRelayCapableHost);
+  const [browser, setBrowser] = useState<'source' | 'dest' | null>(null);
+
+  const sourceHost = useMemo(
+    () => sshHosts.find((host) => host.id === draft.sourceHostId),
+    [draft.sourceHostId, sshHosts],
+  );
+  const destHost = useMemo(
+    () => sshHosts.find((host) => host.id === draft.destHostId),
+    [draft.destHostId, sshHosts],
+  );
+
+  const applySourcePath = (sourcePath: string) => {
+    const trimmed = sourcePath.trim();
+    const updates: Partial<DataRelayRule> = { sourcePath };
+    if (trimmed) {
+      updates.sourceCommand = buildDataRelayFollowCommand(trimmed, {
+        os: resolveHostOs(sourceHost),
+        writeMode: draft.writeMode,
+      });
+    }
+    onChange(updates);
+  };
 
   return (
     <AsidePanel
@@ -111,16 +146,29 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
 
         <div className="space-y-1">
           <Label className="text-[10px] text-muted-foreground">
-            {t('dataRelay.form.sourceCommand')}
+            {t('dataRelay.form.sourcePath')}
           </Label>
-          <Textarea
-            className="min-h-[72px] font-mono text-xs"
-            placeholder={t('dataRelay.form.sourceCommandPlaceholder')}
-            value={draft.sourceCommand || ''}
-            onChange={(event) => onChange({ sourceCommand: event.target.value })}
-          />
+          <div className="flex gap-2">
+            <Input
+              className="h-10 font-mono text-xs"
+              placeholder={t('dataRelay.form.sourcePathPlaceholder')}
+              value={draft.sourcePath || ''}
+              onChange={(event) => applySourcePath(event.target.value)}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              disabled={!sourceHost}
+              title={t('dataRelay.form.browse')}
+              onClick={() => setBrowser('source')}
+            >
+              <FolderOpen size={16} />
+            </Button>
+          </div>
           <p className="text-[10px] text-muted-foreground">
-            {t('dataRelay.form.sourceCommandHint')}
+            {t('dataRelay.form.sourcePathHint')}
           </p>
         </div>
 
@@ -149,12 +197,28 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
           <Label className="text-[10px] text-muted-foreground">
             {t('dataRelay.form.destPath')}
           </Label>
-          <Input
-            className="h-10 font-mono text-xs"
-            placeholder={t('dataRelay.form.destPathPlaceholder')}
-            value={draft.destPath || ''}
-            onChange={(event) => onChange({ destPath: event.target.value })}
-          />
+          <div className="flex gap-2">
+            <Input
+              className="h-10 font-mono text-xs"
+              placeholder={t('dataRelay.form.destPathPlaceholder')}
+              value={draft.destPath || ''}
+              onChange={(event) => onChange({ destPath: event.target.value })}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              disabled={!destHost}
+              title={t('dataRelay.form.browse')}
+              onClick={() => setBrowser('dest')}
+            >
+              <FolderOpen size={16} />
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            {t('dataRelay.form.destPathHint')}
+          </p>
         </div>
 
         <div className="space-y-1">
@@ -163,7 +227,17 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
           </Label>
           <Select
             value={draft.writeMode || 'overwrite'}
-            onValueChange={(value) => onChange({ writeMode: value as DataRelayRule['writeMode'] })}
+            onValueChange={(value) => {
+              const writeMode = value as DataRelayRule['writeMode'];
+              const updates: Partial<DataRelayRule> = { writeMode };
+              if (draft.sourcePath?.trim()) {
+                updates.sourceCommand = buildDataRelayFollowCommand(draft.sourcePath.trim(), {
+                  os: resolveHostOs(sourceHost),
+                  writeMode,
+                });
+              }
+              onChange(updates);
+            }}
           >
             <SelectTrigger>
               <SelectValue />
@@ -199,6 +273,37 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
           </Button>
         </div>
       </AsidePanelFooter>
+
+      <RemotePathBrowserDialog
+        open={browser === 'source'}
+        host={sourceHost}
+        hosts={hosts}
+        keys={keys}
+        identities={identities}
+        knownHosts={knownHosts}
+        terminalSettings={terminalSettings}
+        initialPath={draft.sourcePath}
+        title={t('dataRelay.browser.sourceTitle')}
+        onSelect={applySourcePath}
+        onOpenChange={(open) => {
+          if (!open) setBrowser(null);
+        }}
+      />
+      <RemotePathBrowserDialog
+        open={browser === 'dest'}
+        host={destHost}
+        hosts={hosts}
+        keys={keys}
+        identities={identities}
+        knownHosts={knownHosts}
+        terminalSettings={terminalSettings}
+        initialPath={draft.destPath}
+        title={t('dataRelay.browser.destTitle')}
+        onSelect={(destPath) => onChange({ destPath })}
+        onOpenChange={(open) => {
+          if (!open) setBrowser(null);
+        }}
+      />
     </AsidePanel>
   );
 };

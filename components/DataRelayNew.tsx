@@ -7,7 +7,7 @@ import {
 } from '../application/state/useDataRelayState';
 import { DataRelayRule, Host, Identity, KnownHost, SSHKey } from '../domain/models';
 import { cn } from '../lib/utils';
-import { RuleCard, RuleFormPanel } from './data-relay';
+import { RuleCard, RuleFormPanel, CompareView } from './data-relay';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { toast } from './ui/toast';
@@ -53,6 +53,7 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
   const [panelMode, setPanelMode] = useState<'new' | 'edit' | null>(null);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Partial<DataRelayRule>>({});
+  const [compareRuleId, setCompareRuleId] = useState<string | null>(null);
 
   const hostsById = useMemo(() => {
     const map = new Map<string, Host>();
@@ -68,6 +69,7 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
       const dest = hostsById.get(rule.destHostId);
       return [
         rule.label,
+        rule.sourcePath,
         rule.sourceCommand,
         rule.destPath,
         source?.label,
@@ -98,8 +100,15 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
     setDraft({});
   }, []);
 
+  const compareRule = compareRuleId
+    ? rules.find((rule) => rule.id === compareRuleId) ?? null
+    : null;
+
   const draftIsValid = Boolean(
-    draft.sourceHostId && draft.sourceCommand?.trim() && draft.destHostId && draft.destPath?.trim(),
+    draft.sourceHostId
+    && (draft.sourcePath?.trim() || draft.sourceCommand?.trim())
+    && draft.destHostId
+    && draft.destPath?.trim(),
   );
 
   const handleSave = useCallback(() => {
@@ -142,6 +151,28 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {compareRule ? (
+        <CompareView
+          key={compareRule.id}
+          rule={compareRule}
+          hosts={hosts}
+          keys={keys}
+          identities={identities}
+          knownHosts={knownHosts}
+          terminalSettings={terminalSettings}
+          sourceHost={hostsById.get(compareRule.sourceHostId)}
+          destHost={hostsById.get(compareRule.destHostId)}
+          onBack={() => setCompareRuleId(null)}
+          onEdit={() => openEditPanel(compareRule)}
+          onStart={() => void handleStart(compareRule.id)}
+          onStop={() => void handleStop(compareRule.id)}
+          onScanSettingsChange={(updates) => {
+            const result = updateRule(compareRule.id, updates as Record<string, unknown>);
+            if (!result.ok && result.error) toast.error(result.error);
+          }}
+        />
+      ) : (
+        <>
       <VaultPageHeader dataSection="vault-data-relay">
         <span className={cn(vaultSectionTitleClass, 'hidden md:inline')}>
           {t('vault.nav.dataRelay')}
@@ -227,17 +258,28 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
                 onStart={() => void handleStart(rule.id)}
                 onStop={() => void handleStop(rule.id)}
                 onEdit={() => openEditPanel(rule)}
+                onOpen={() => setCompareRuleId(rule.id)}
+                onScanSettingsChange={(updates) => {
+                  const result = updateRule(rule.id, updates as Record<string, unknown>);
+                  if (!result.ok && result.error) toast.error(result.error);
+                }}
               />
             ))}
           </div>
         )}
       </div>
+        </>
+      )}
 
       {panelMode && (
         <RuleFormPanel
           mode={panelMode}
           draft={draft}
           hosts={hosts}
+          keys={keys}
+          identities={identities}
+          knownHosts={knownHosts}
+          terminalSettings={terminalSettings}
           onChange={(updates) => setDraft((current) => ({ ...current, ...updates }))}
           onSave={handleSave}
           onClose={closePanel}
@@ -257,6 +299,7 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
             panelMode === 'edit' && editingRuleId
               ? () => {
                   deleteRule(editingRuleId);
+                  if (compareRuleId === editingRuleId) setCompareRuleId(null);
                   closePanel();
                 }
               : undefined

@@ -123,6 +123,12 @@ export const useSftpBackend = () => {
     return bridge.getHomeDir();
   }, []);
 
+  const getSftpHomeDir = useCallback(async (sftpId: string, encoding?: SftpFilenameEncoding) => {
+    const bridge = netcattyBridge.get();
+    if (!bridge?.getSftpHomeDir) return undefined;
+    return bridge.getSftpHomeDir(sftpId, encoding);
+  }, []);
+
   const listDrives = useCallback(async () => {
     return await netcattyBridge.get()?.listDrives?.() ?? [];
   }, []);
@@ -131,6 +137,14 @@ export const useSftpBackend = () => {
     const bridge = netcattyBridge.get();
     if (!bridge?.openPath) throw new Error("openPath unavailable");
     return bridge.openPath(path);
+  }, []);
+
+  const startStreamTransfer = useCallback(async (
+    options: Parameters<NonNullable<NetcattyBridge["startStreamTransfer"]>>[0],
+  ) => {
+    const bridge = netcattyBridge.get();
+    if (!bridge?.startStreamTransfer) throw new Error("startStreamTransfer unavailable");
+    return bridge.startStreamTransfer(options);
   }, []);
 
   const cancelTransfer = useCallback(async (transferId: string) => {
@@ -194,9 +208,11 @@ export const useSftpBackend = () => {
     mkdirLocal,
     statLocal,
     getHomeDir,
+    getSftpHomeDir,
     listDrives,
     openPath,
 
+    startStreamTransfer,
     cancelTransfer,
     pauseTransfer,
     resumeTransfer,

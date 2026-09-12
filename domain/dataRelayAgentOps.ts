@@ -1,4 +1,16 @@
-import type { DataRelayRule, DataRelayWriteMode, Host } from './models';
+import { resolveHostOs } from './host';
+import type {
+  DataRelayRule,
+  DataRelayScanCheckpoint,
+  DataRelayScanMode,
+  DataRelayWriteMode,
+  Host,
+} from './models';
+import { buildDataRelayFollowCommand } from './dataRelayPaths';
+import {
+  normalizeDataRelayScanIntervalMs,
+  normalizeDataRelayScanMode,
+} from './dataRelayScan';
 import { getNextVaultOrder } from './vaultOrder';
 
 type Result<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -9,6 +21,7 @@ export const hasDataRelayConnectionChanged = (
   updated: DataRelayRule,
 ): boolean => (
   existing.sourceHostId !== updated.sourceHostId
+  || (existing.sourcePath ?? '') !== (updated.sourcePath ?? '')
   || existing.sourceCommand !== updated.sourceCommand
   || existing.destHostId !== updated.destHostId
   || existing.destPath !== updated.destPath
@@ -63,6 +76,28 @@ const normalizeAutoStart = (value: unknown, fallback: boolean): Result<boolean> 
   return { ok: false, error: 'autoStart must be true or false.' };
 };
 
+const normalizeScanCheckpoint = (
+  value: unknown,
+  fallback: DataRelayScanCheckpoint | undefined,
+): DataRelayScanCheckpoint | undefined => {
+  if (value === undefined) return fallback;
+  if (value === null) return undefined;
+  if (typeof value !== 'object') return fallback;
+  const source = value as { at?: unknown; files?: unknown };
+  const at = Number(source.at);
+  if (!Number.isFinite(at) || !source.files || typeof source.files !== 'object') return fallback;
+  const files: DataRelayScanCheckpoint['files'] = {};
+  for (const [path, entry] of Object.entries(source.files as Record<string, unknown>)) {
+    if (!path || !entry || typeof entry !== 'object') continue;
+    const record = entry as { size?: unknown; lastModified?: unknown };
+    const size = Number(record.size);
+    const lastModified = Number(record.lastModified);
+    if (!Number.isFinite(size) || !Number.isFinite(lastModified)) continue;
+    files[path] = { size, lastModified };
+  }
+  return { at, files };
+};
+
 function buildRule(
   source: Record<string, unknown>,
   hosts: Host[],
@@ -81,11 +116,24 @@ function buildRule(
   const validatedDest = validateDataRelayHost(hosts, destHostId, 'destination');
   if ('error' in validatedDest) return { ok: false, error: validatedDest.error };
 
-  const sourceCommand = String(
+  const writeMode = normalizeWriteMode(
+    source.writeMode,
+    existing?.writeMode ?? 'overwrite',
+  );
+  if ('error' in writeMode) return { ok: false, error: writeMode.error };
+
+  const sourcePath = String(source.sourcePath ?? existing?.sourcePath ?? '').trim();
+  let sourceCommand = String(
     source.sourceCommand ?? existing?.sourceCommand ?? '',
   ).trim();
+  if (sourcePath) {
+    sourceCommand = buildDataRelayFollowCommand(sourcePath, {
+      os: resolveHostOs(validatedSource.value),
+      writeMode: writeMode.value,
+    });
+  }
   if (!sourceCommand) {
-    return { ok: false, error: 'sourceCommand is required.' };
+    return { ok: false, error: 'sourcePath is required.' };
   }
 
   const destPath = String(source.destPath ?? existing?.destPath ?? '').trim();
@@ -93,17 +141,22 @@ function buildRule(
     return { ok: false, error: 'destPath is required.' };
   }
 
-  const writeMode = normalizeWriteMode(
-    source.writeMode,
-    existing?.writeMode ?? 'overwrite',
-  );
-  if ('error' in writeMode) return { ok: false, error: writeMode.error };
-
   const autoStart = normalizeAutoStart(
     source.autoStart,
     existing?.autoStart ?? false,
   );
   if ('error' in autoStart) return { ok: false, error: autoStart.error };
+
+  const scanIntervalMs = normalizeDataRelayScanIntervalMs(
+    source.scanIntervalMs === undefined ? existing?.scanIntervalMs : source.scanIntervalMs,
+  );
+  const scanMode: DataRelayScanMode = normalizeDataRelayScanMode(
+    source.scanMode === undefined ? existing?.scanMode : source.scanMode,
+  );
+  const scanCheckpoint = normalizeScanCheckpoint(
+    source.scanCheckpoint,
+    existing?.scanCheckpoint,
+  );
 
   if (!existing && !newRule) {
     return { ok: false, error: 'New rule id and timestamp are required.' };
@@ -118,10 +171,14 @@ function buildRule(
       id: existing?.id ?? newRule!.id,
       label,
       sourceHostId: sourceHostId!,
+      ...(sourcePath ? { sourcePath } : {}),
       sourceCommand,
       destHostId: destHostId!,
       destPath,
       writeMode: writeMode.value,
+      scanIntervalMs,
+      scanMode,
+      ...(scanCheckpoint ? { scanCheckpoint } : {}),
       autoStart: autoStart.value,
       status: existing?.status ?? 'inactive',
       error: existing?.error,
@@ -157,7 +214,13 @@ export function updateDataRelayRule(
   if ('error' in built) return { ok: false, error: built.error };
   const connectionChanged = hasDataRelayConnectionChanged(existing, built.value);
   const updatedRule = connectionChanged
-    ? { ...built.value, status: 'inactive' as const, error: undefined, bytesTransferred: undefined }
+    ? {
+      ...built.value,
+      status: 'inactive' as const,
+      error: undefined,
+      bytesTransferred: undefined,
+      scanCheckpoint: undefined,
+    }
     : built.value;
   return {
     ok: true,
@@ -188,6 +251,7 @@ export function duplicateDataRelayRule(
     lastUsedAt: undefined,
     createdAt: newRule.now,
     order: getNextVaultOrder(rules),
+    scanCheckpoint: undefined,
   };
   return { ok: true, value: { rules: [...rules, rule], rule } };
 }

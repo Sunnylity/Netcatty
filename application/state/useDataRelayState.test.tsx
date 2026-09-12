@@ -57,9 +57,9 @@ test("useDataRelayState creates, updates and deletes rules with persistence", as
     await act(async () => {
       const result = state!.createRule({
         sourceHostId: "win",
-        sourceCommand: "tail -f app.log",
+        sourcePath: "/var/log/",
         destHostId: "linux",
-        destPath: "/tmp/out.log",
+        destPath: "/tmp/",
       });
       assert.equal(result.ok, true);
     });
@@ -70,11 +70,13 @@ test("useDataRelayState creates, updates and deletes rules with persistence", as
 
     const persisted = JSON.parse(store.get(STORAGE_KEY_DATA_RELAY) ?? "[]") as Array<{
       status: string;
+      sourcePath?: string;
       sourceCommand: string;
     }>;
     assert.equal(persisted.length, 1);
     assert.equal(persisted[0].status, "inactive");
-    assert.equal(persisted[0].sourceCommand, "tail -f app.log");
+    assert.equal(persisted[0].sourcePath, "/var/log/");
+    assert.equal(persisted[0].sourceCommand, "tail -n +1 -F -- '/var/log'/*");
 
     await act(async () => {
       const result = state!.updateRule(ruleId, { label: "Renamed" });

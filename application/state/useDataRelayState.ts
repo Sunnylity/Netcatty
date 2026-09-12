@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   DataRelayRule,
+  DataRelayScanCheckpoint,
   Host,
   Identity,
   KnownHost,
@@ -12,6 +13,7 @@ import {
   duplicateDataRelayRule,
   updateDataRelayRule,
 } from "../../domain/dataRelayAgentOps";
+import { isDataRelayFolderScanRule } from "../../domain/dataRelayScan";
 import {
   migrateDataRelayRulesFromStorage,
   toPersistedDataRelayRules,
@@ -28,6 +30,7 @@ import {
   stopDataRelay,
   subscribeDataRelayRuntime,
 } from "../../infrastructure/services/dataRelayService";
+import { useDataRelayFolderScan } from "./useDataRelayFolderScan";
 
 export type DataRelayViewMode = "grid" | "list";
 
@@ -135,6 +138,39 @@ export const useDataRelayState = ({
     [],
   );
 
+  const persistScanCheckpoint = useCallback((ruleId: string, checkpoint: DataRelayScanCheckpoint) => {
+    const current = rulesRef.current;
+    if (!current.some((rule) => rule.id === ruleId)) return;
+    commitRules(
+      current.map((rule) => (rule.id === ruleId ? { ...rule, scanCheckpoint: checkpoint } : rule)),
+    );
+  }, [commitRules]);
+
+  const {
+    startScan,
+    stopScan,
+    stopAllScans,
+    isScanning,
+  } = useDataRelayFolderScan({
+    getRule: (ruleId) => rulesRef.current.find((rule) => rule.id === ruleId),
+    hosts,
+    keys,
+    identities,
+    knownHosts,
+    terminalSettings,
+    onStatus: (ruleId, status, error) => patchRuleRuntime(ruleId, { status, error }),
+    onBytes: (ruleId, bytesTransferred) => patchRuleRuntime(ruleId, { bytesTransferred }),
+    onCheckpoint: persistScanCheckpoint,
+  });
+  const startScanRef = useRef(startScan);
+  startScanRef.current = startScan;
+  const stopScanRef = useRef(stopScan);
+  stopScanRef.current = stopScan;
+  const stopAllScansRef = useRef(stopAllScans);
+  stopAllScansRef.current = stopAllScans;
+  const isScanningRef = useRef(isScanning);
+  isScanningRef.current = isScanning;
+
   // Runtime projection: apply the authoritative snapshot, then follow events.
   useEffect(() => {
     let disposed = false;
@@ -142,6 +178,7 @@ export const useDataRelayState = ({
 
     const applyRecord = (record: DataRelayRuntimeRecord | undefined | null) => {
       if (!record?.ruleId) return;
+      if (isScanningRef.current(record.ruleId)) return;
       const phase = record.phase;
       const status: DataRelayRule["status"] =
         phase === "connecting" || phase === "active" || phase === "error"
@@ -168,6 +205,7 @@ export const useDataRelayState = ({
             return;
           }
           if (event.kind === "remove" && event.ruleId) {
+            if (isScanningRef.current(event.ruleId)) return;
             patchRuleRuntime(event.ruleId, { status: "inactive", error: undefined });
           }
         });
@@ -186,6 +224,12 @@ export const useDataRelayState = ({
     async (ruleId: string): Promise<{ success: boolean; error?: string }> => {
       const rule = rulesRef.current.find((candidate) => candidate.id === ruleId);
       if (!rule) return { success: false, error: `Rule "${ruleId}" was not found.` };
+      if (isDataRelayFolderScanRule(rule)) {
+        if (isScanningRef.current(ruleId)) return { success: true };
+        await stopDataRelay(ruleId);
+        return startScanRef.current(ruleId);
+      }
+      await stopScanRef.current(ruleId);
       return startDataRelay(
         rule,
         hostsRef.current,
@@ -200,8 +244,10 @@ export const useDataRelayState = ({
   );
 
   const stopRule = useCallback(
-    async (ruleId: string): Promise<{ success: boolean; error?: string }> =>
-      stopDataRelay(ruleId, (status, error) => patchRuleRuntime(ruleId, { status, error })),
+    async (ruleId: string): Promise<{ success: boolean; error?: string }> => {
+      await stopScanRef.current(ruleId);
+      return stopDataRelay(ruleId, (status, error) => patchRuleRuntime(ruleId, { status, error }));
+    },
     [patchRuleRuntime],
   );
 
@@ -273,6 +319,7 @@ export const useDataRelayState = ({
   }, []);
 
   const stopAllRules = useCallback(async () => {
+    await stopAllScansRef.current();
     await stopAllActiveDataRelays();
     setRules((current) =>
       current.map((rule) =>

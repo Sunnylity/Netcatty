@@ -49,8 +49,29 @@ test('createDataRelayRule builds a rule with defaults and vault order', () => {
   assert.equal(result.value.rule.destPath, '/tmp/out.log');
   assert.equal(result.value.rule.writeMode, 'overwrite');
   assert.equal(result.value.rule.autoStart, false);
+  assert.equal(result.value.rule.scanIntervalMs, 30_000);
+  assert.equal(result.value.rule.scanMode, 'mtime');
   assert.equal(result.value.rule.status, 'inactive');
   assert.equal(result.value.rules.length, 1);
+});
+
+test('createDataRelayRule generates a follow command from sourcePath', () => {
+  const result = createDataRelayRule([], hosts, {
+    sourceHostId: 'win',
+    sourcePath: '/var/log/',
+    destHostId: 'linux',
+    destPath: '/tmp/',
+    scanIntervalMs: 120_000,
+    scanMode: 'checkpoint',
+  }, { id: 'new-path', now: 100 });
+
+  assert.equal('error' in result, false);
+  if ('error' in result) return;
+  assert.equal(result.value.rule.sourcePath, '/var/log/');
+  assert.equal(result.value.rule.sourceCommand, "tail -n +1 -F -- '/var/log'/*");
+  assert.equal(result.value.rule.destPath, '/tmp/');
+  assert.equal(result.value.rule.scanIntervalMs, 120_000);
+  assert.equal(result.value.rule.scanMode, 'checkpoint');
 });
 
 test('createDataRelayRule rejects missing command, path and unknown hosts', () => {
@@ -113,11 +134,31 @@ test('updateDataRelayRule keeps runtime state when only the label changed', () =
   assert.equal(result.value.rule.bytesTransferred, 2048);
 });
 
+test('updateDataRelayRule keeps a running relay when only scan settings change', () => {
+  const existing = makeRule({
+    status: 'active',
+    scanIntervalMs: 30_000,
+    scanMode: 'mtime',
+    scanCheckpoint: { at: 9, files: { 'a.log': { size: 1, lastModified: 2 } } },
+  });
+  const result = updateDataRelayRule([existing], hosts, 'rule-1', {
+    scanIntervalMs: 90_000,
+    scanMode: 'checkpoint',
+  });
+  assert.equal('error' in result, false);
+  if ('error' in result) return;
+  assert.equal(result.value.rule.status, 'active');
+  assert.equal(result.value.rule.scanIntervalMs, 90_000);
+  assert.equal(result.value.rule.scanMode, 'checkpoint');
+  assert.equal(result.value.rule.scanCheckpoint?.at, 9);
+});
+
 test('hasDataRelayConnectionChanged tracks all relay-defining fields', () => {
   const base = makeRule();
   assert.equal(hasDataRelayConnectionChanged(base, makeRule({ label: 'x' })), false);
   assert.equal(hasDataRelayConnectionChanged(base, makeRule({ sourceHostId: 'linux' })), true);
   assert.equal(hasDataRelayConnectionChanged(base, makeRule({ sourceCommand: 'cat x' })), true);
+  assert.equal(hasDataRelayConnectionChanged(base, makeRule({ sourcePath: '/var/log/app.log' })), true);
   assert.equal(hasDataRelayConnectionChanged(base, makeRule({ destHostId: 'win' })), true);
   assert.equal(hasDataRelayConnectionChanged(base, makeRule({ destPath: '/other' })), true);
   assert.equal(hasDataRelayConnectionChanged(base, makeRule({ writeMode: 'append' })), true);
