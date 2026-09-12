@@ -18,6 +18,7 @@ import {
   useTerminalSettingsStore,
 } from '../../state/terminalSettingsStore';
 import { usePluginViewTabs } from '../../state/pluginViewTabStore';
+import { useDataRelayViewTabs } from '../../state/dataRelayViewTabStore';
 import { getAppHandlers, subscribeAppHandlers } from '../appHandlersBridge';
 import {
   publishAppShellChrome,
@@ -45,7 +46,7 @@ export function ChromeHost() {
   const terminalSettings = useTerminalSettingsStore();
   const editorTabs = useEditorTabChromeList();
   const pluginViewTabs = usePluginViewTabs();
-  void pluginViewTabs;
+  const dataRelayViewTabs = useDataRelayViewTabs();
   const customThemes = useCustomThemes();
   const handlers = useSyncExternalStore(
     subscribeAppHandlers,
@@ -93,9 +94,13 @@ export function ChromeHost() {
     () => pluginViewTabs.map((tab) => tab.id),
     [pluginViewTabs],
   );
+  const dataRelayViewTabIds = useMemo(
+    () => dataRelayViewTabs.map((tab) => tab.id),
+    [dataRelayViewTabs],
+  );
   const additionalWorkTabIds = useMemo(
-    () => [...editorTabTopIds, ...pluginViewTabIds],
-    [editorTabTopIds, pluginViewTabIds],
+    () => [...editorTabTopIds, ...pluginViewTabIds, ...dataRelayViewTabIds],
+    [editorTabTopIds, pluginViewTabIds, dataRelayViewTabIds],
   );
 
   const orderedTabsWithEditors = useMemo(

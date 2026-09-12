@@ -1,4 +1,4 @@
-import { Copy, FileCode, FileText, LayoutGrid, Minus, Server, Square, Terminal, TerminalSquare, Usb, X } from 'lucide-react';
+import { Copy, FileCode, FileText, LayoutGrid, Minus, Server, Square, Terminal, TerminalSquare, Usb, Waypoints, X } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { activeTabStore, useActiveTabId, useIsTabActive } from '../../application/state/activeTabStore';
 import {
@@ -32,6 +32,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { SessionTabContextMenuContent } from './SessionTabContextMenuContent';
 import { renderHostIconGlyph } from '../hostIconRenderer';
 import type { PluginViewTab } from '../../application/state/pluginViewTabStore';
+import type { DataRelayViewTab } from '../../application/state/dataRelayViewTabStore';
 import { PluginContributionIcon } from '../plugins/PluginContributionIcon';
 
 // File extensions that render the code-file icon instead of the plain text icon.
@@ -552,6 +553,102 @@ export const PluginViewTopTab: React.FC<PluginViewTopTabProps> = memo(({
   );
 });
 PluginViewTopTab.displayName = 'PluginViewTopTab';
+
+interface DataRelayTopTabProps {
+  tab: DataRelayViewTab;
+  onClose(tabId: string): void;
+  renderBulkCloseItems: RenderBulkCloseItems;
+  t: TranslateFn;
+  isBeingDragged: boolean;
+  isDraggingForReorder: boolean;
+  shiftStyle: React.CSSProperties;
+  showDropIndicatorBefore: boolean;
+  showDropIndicatorAfter: boolean;
+  onTabDragStart(e: React.DragEvent, tabId: string): void;
+  onTabDragEnd(): void;
+  onTabDragOver(e: React.DragEvent, tabId: string): void;
+  onTabDragLeave(e: React.DragEvent): void;
+  onTabDrop(e: React.DragEvent, tabId: string): void;
+  tabAnimationClass?: string;
+  shortcutNumber?: number;
+}
+
+export const DataRelayTopTab: React.FC<DataRelayTopTabProps> = memo(({
+  tab,
+  onClose,
+  renderBulkCloseItems,
+  t,
+  isBeingDragged,
+  isDraggingForReorder,
+  shiftStyle,
+  showDropIndicatorBefore,
+  showDropIndicatorAfter,
+  onTabDragStart,
+  onTabDragEnd,
+  onTabDragOver,
+  onTabDragLeave,
+  onTabDrop,
+  tabAnimationClass,
+  shortcutNumber,
+}) => {
+  const isActive = useIsTabActive(tab.id);
+  const close = useCallback((event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    onClose(tab.id);
+  }, [onClose, tab.id]);
+  const tabBody = (
+        <div
+          data-tab-id={tab.id}
+          data-tab-type="data-relay"
+          data-state={isActive ? 'active' : 'inactive'}
+          onClick={() => activeTabStore.setActiveTabId(tab.id)}
+          onMouseDown={handleTabMiddleMouseDown}
+          onAuxClick={(event) => handleTabMiddleClickClose(event, close)}
+          draggable
+          onDragStart={(event) => onTabDragStart(event, tab.id)}
+          onDragEnd={onTabDragEnd}
+          onDragOver={(event) => onTabDragOver(event, tab.id)}
+          onDragLeave={onTabDragLeave}
+          onDrop={(event) => onTabDrop(event, tab.id)}
+          className={cn(
+            'netcatty-tab relative h-7 min-w-[140px] max-w-[240px] flex-shrink-0 cursor-pointer items-center justify-between gap-2 overflow-hidden rounded-t-md pl-3 pr-2 text-xs font-semibold app-no-drag',
+            'flex transition-transform duration-150',
+            isBeingDragged && isDraggingForReorder && 'scale-95 opacity-40',
+            tabAnimationClass,
+          )}
+          style={{
+            ...shiftStyle,
+            backgroundColor: isActive ? 'var(--top-tabs-active-bg, hsl(var(--background)))' : 'transparent',
+            color: isActive ? 'var(--top-tabs-fg, hsl(var(--foreground)))' : 'var(--top-tabs-muted, hsl(var(--muted-foreground)))',
+          }}
+        >
+          {showDropIndicatorBefore && isDraggingForReorder && <div className="absolute -left-0.5 bottom-1 top-1 w-0.5 rounded-full bg-primary" />}
+          {showDropIndicatorAfter && isDraggingForReorder && <div className="absolute -right-0.5 bottom-1 top-1 w-0.5 rounded-full bg-primary" />}
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {shortcutNumber != null
+              ? <TabShortcutNumberBadge number={shortcutNumber} />
+              : <Waypoints size={14} className="shrink-0" />}
+            <span className="truncate leading-5">{tab.label}</span>
+          </div>
+          <button onClick={close} className="flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-muted" aria-label={t('tabs.closePluginViewAria', { title: tab.label })}><X size={12} /></button>
+        </div>
+  );
+  return (
+    <ContextMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <ContextMenuTrigger asChild>{tabBody}</ContextMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{tab.label}</TooltipContent>
+      </Tooltip>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={() => onClose(tab.id)}>{t('common.close')}</ContextMenuItem>
+        {renderBulkCloseItems(tab.id)}
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+});
+DataRelayTopTab.displayName = 'DataRelayTopTab';
 
 interface EditorTopTabProps {
   tabId: string;

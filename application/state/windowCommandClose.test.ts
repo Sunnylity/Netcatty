@@ -151,6 +151,20 @@ test("Cmd+W closes a native plugin view tab before the window", () => {
   );
 });
 
+test("Cmd+W closes a data-relay rule tab before the window", () => {
+  assert.deepEqual(
+    resolveWindowCommandCloseIntent({
+      activeTabId: "data-relay:rule-1",
+      editorTabIds: [],
+      sessionIds: [],
+      workspaceIds: [],
+      logViewIds: [],
+      dataRelayViewTabIds: ["data-relay:rule-1"],
+    }),
+    { kind: "closeTab" },
+  );
+});
+
 test("Cmd+W closes the window from the Vault page", () => {
   assert.deepEqual(
     resolveWindowCommandCloseIntent({

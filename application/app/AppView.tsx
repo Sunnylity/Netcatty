@@ -38,6 +38,10 @@ import { netcattyBridge } from '../../infrastructure/services/netcattyBridge';
 import { resolveEffectiveTerminalHost } from '../../domain/terminalHostResolution';
 import { getAvailablePaneMagnificationController } from '../../domain/paneMagnification';
 import { pluginViewTabStore, usePluginViewTabs } from '../state/pluginViewTabStore';
+import {
+  dataRelayViewTabStore,
+  useDataRelayViewTabs,
+} from '../state/dataRelayViewTabStore';
 import { buildPluginSettingScopeCatalog } from '../state/usePluginSettingScopeCatalog';
 import { useWorkSurfaceHostEditor } from '../state/useWorkSurfaceHostEditor';
 import {
@@ -55,6 +59,9 @@ const LazyCreateWorkspaceDialog = lazy(() =>
 );
 const LazyTextEditorTabView = lazy(() =>
   import('../../components/editor/TextEditorTabView').then((m) => ({ default: m.TextEditorTabView })),
+);
+const LazyDataRelayRuleTabView = lazy(() =>
+  import('../../components/data-relay/DataRelayRuleTabView').then((m) => ({ default: m.DataRelayRuleTabView })),
 );
 
 const TextEditorTabFallback = ({ tabId }: { tabId: string }) => {
@@ -220,6 +227,7 @@ function AppViewInner({ domains }: AppViewProps) {
   // (TopTabs items, mounts, host tree, chrome, plugin keybindings) own that
   // subscription so top-tab switches do not rebuild the App shell.
   const pluginViewTabs = usePluginViewTabs();
+  const dataRelayViewTabs = useDataRelayViewTabs();
   // Merge domain slices once per AppView render. AppView only re-renders when a
   // domain slice identity changes (see appViewDomainsEqual). Depend on the
   // domain bag so the hook graph stays honest; bag identity only changes when
@@ -410,6 +418,15 @@ function AppViewInner({ domains }: AppViewProps) {
     pluginViewTabStore.close(tabId);
   }, [orderedTabsWithEditors]);
 
+  const closeDataRelayViewTab = useCallback((tabId: string) => {
+    const index = orderedTabsWithEditors.indexOf(tabId);
+    if (activeTabStore.getActiveTabId() === tabId) {
+      const next = orderedTabsWithEditors[index - 1] ?? orderedTabsWithEditors[index + 1] ?? 'vault';
+      activeTabStore.setActiveTabId(next === tabId ? 'vault' : next);
+    }
+    dataRelayViewTabStore.close(tabId);
+  }, [orderedTabsWithEditors]);
+
   const orderedTabsWithEditorsRef = useRef(orderedTabsWithEditors);
   orderedTabsWithEditorsRef.current = orderedTabsWithEditors;
 
@@ -534,6 +551,8 @@ function AppViewInner({ domains }: AppViewProps) {
         editorTabs={editorTabs}
         pluginViewTabs={pluginViewTabs}
         onClosePluginViewTab={closePluginViewTab}
+        dataRelayViewTabs={dataRelayViewTabs}
+        onCloseDataRelayViewTab={closeDataRelayViewTab}
         onRequestCloseEditorTab={handleRequestCloseEditorTab}
         hostById={hostById}
       />
@@ -793,6 +812,22 @@ function AppViewInner({ domains }: AppViewProps) {
                 keyBindings={keyBindings}
                 hostById={hostById}
                 onRequestClose={(id) => handleRequestCloseEditorTabRef.current(id)}
+              />
+            </Suspense>
+          </LazyLoadBoundary>
+        ))}
+
+        {dataRelayViewTabs.map((tab) => (
+          <LazyLoadBoundary key={tab.id} name="Data relay" resetKey={tab.id}>
+            <Suspense fallback={null}>
+              <LazyDataRelayRuleTabView
+                tab={tab}
+                hosts={hosts}
+                keys={keys}
+                identities={identities}
+                knownHosts={effectiveKnownHosts}
+                terminalSettings={terminalSettings}
+                onOpenTerminalAtPath={(host, path) => handleConnectToHost(host, false, false, { pendingInitialCwd: path })}
               />
             </Suspense>
           </LazyLoadBoundary>

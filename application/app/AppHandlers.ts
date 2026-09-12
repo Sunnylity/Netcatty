@@ -722,7 +722,7 @@ export async function closeTabsBatchImpl(getCtx: AppContextGetter, targetIds: st
 }
 
 export function executeHotkeyActionImpl(getCtx: AppContextGetter, action: string, e: KeyboardEvent) {
-  const { IS_DEV, MOVE_FOCUS_DEBOUNCE_MS, activeTabStore, addConnectionLogRef, canUseGlobalBroadcast, closePluginViewTab, closeSession, closeTabInFlightRef, closeWorkspace, collectSessionIds, confirmIfBusyLocalTerminal, createLocalTerminalWithCurrentShell, editorTabs, fromEditorTabId, handleOpenSettingsRef, handleRequestCloseEditorTabRef, isEditorTabId, isPluginViewTabId, isQuickSwitcherOpen, lastMoveFocusTimeRef, moveFocusInWorkspace, orderedTabs, resolveCloseIntent, resolveSnippetsShortcutIntent, sessions, setActiveTabId, setAddToWorkspaceDialog, setIsQuickSwitcherOpen, setNavigateToSection, settings, sftpPaneMagnificationRef, splitSessionWithCurrentShell, systemInfoRef, terminalPaneMagnificationRef, toEditorTabId, toggleBroadcast, toggleGlobalBroadcast, toggleScriptsSidePanelRef, toggleSidePanelRef, workspaces } = getCtx();
+  const { IS_DEV, MOVE_FOCUS_DEBOUNCE_MS, activeTabStore, addConnectionLogRef, canUseGlobalBroadcast, closePluginViewTab, closeDataRelayViewTab, closeSession, closeTabInFlightRef, closeWorkspace, collectSessionIds, confirmIfBusyLocalTerminal, createLocalTerminalWithCurrentShell, editorTabs, fromEditorTabId, handleOpenSettingsRef, handleRequestCloseEditorTabRef, isEditorTabId, isPluginViewTabId, isDataRelayViewTabId, isQuickSwitcherOpen, lastMoveFocusTimeRef, moveFocusInWorkspace, orderedTabs, resolveCloseIntent, resolveSnippetsShortcutIntent, sessions, setActiveTabId, setAddToWorkspaceDialog, setIsQuickSwitcherOpen, setNavigateToSection, settings, sftpPaneMagnificationRef, splitSessionWithCurrentShell, systemInfoRef, terminalPaneMagnificationRef, toEditorTabId, toggleBroadcast, toggleGlobalBroadcast, toggleScriptsSidePanelRef, toggleSidePanelRef, workspaces } = getCtx();
 {
     const shortcutTabs = buildNumberShortcutTabTargets({
       showSftpTab: settings.showSftpTab ?? true,
@@ -768,6 +768,11 @@ export function executeHotkeyActionImpl(getCtx: AppContextGetter, action: string
 
         if (isPluginViewTabId?.(currentId)) {
           closePluginViewTab?.(currentId);
+          break;
+        }
+
+        if (isDataRelayViewTabId?.(currentId)) {
+          closeDataRelayViewTab?.(currentId);
           break;
         }
 

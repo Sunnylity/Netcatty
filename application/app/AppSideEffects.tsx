@@ -29,6 +29,11 @@ import {
   usePluginViewTabs,
 } from '../state/pluginViewTabStore';
 import {
+  dataRelayViewTabStore,
+  isDataRelayViewTabId,
+  useDataRelayViewTabs,
+} from '../state/dataRelayViewTabStore';
+import {
   clearRememberedKeyPassphrases,
   loadDefaultKeyPassphrase,
   rememberKeyPassphrase,
@@ -107,6 +112,7 @@ export function AppSideEffects() {
   const { locked: appLockLocked } = useAppLockChrome();
   const { t } = useI18n();
   const pluginViewTabs = usePluginViewTabs();
+  const dataRelayViewTabs = useDataRelayViewTabs();
 
   const [isQuickSwitcherOpen, setIsQuickSwitcherOpen] = useState(false);
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
@@ -988,9 +994,13 @@ export function AppSideEffects() {
     () => pluginViewTabs.map((tab) => tab.id),
     [pluginViewTabs],
   );
+  const dataRelayViewTabIds = useMemo(
+    () => dataRelayViewTabs.map((tab) => tab.id),
+    [dataRelayViewTabs],
+  );
   const additionalWorkTabIds = useMemo(
-    () => [...editorTabTopIds, ...pluginViewTabIds],
-    [editorTabTopIds, pluginViewTabIds],
+    () => [...editorTabTopIds, ...pluginViewTabIds, ...dataRelayViewTabIds],
+    [editorTabTopIds, pluginViewTabIds, dataRelayViewTabIds],
   );
 
   // 顶层标签顺序需要包含编辑器标签，供顶部标签和编辑器邻居计算使用。
@@ -1009,6 +1019,15 @@ export function AppSideEffects() {
     pluginViewTabStore.close(tabId);
   }, [orderedTabsWithEditors]);
 
+  const closeDataRelayViewTab = useCallback((tabId: string) => {
+    const index = orderedTabsWithEditors.indexOf(tabId);
+    if (activeTabStore.getActiveTabId() === tabId) {
+      const next = orderedTabsWithEditors[index - 1] ?? orderedTabsWithEditors[index + 1] ?? 'vault';
+      activeTabStore.setActiveTabId(next === tabId ? 'vault' : next);
+    }
+    dataRelayViewTabStore.close(tabId);
+  }, [orderedTabsWithEditors]);
+
   // Close many tabs at once with a single batched busy-shell confirmation.
   // Used by the "Close all / Close others / Close to the right" context-menu
   // actions on tabs (#748).
@@ -1022,13 +1041,17 @@ export function AppSideEffects() {
         activeTabId: activeBeforeClose,
       });
       const pluginIds = targetIds.filter((id) => pluginViewTabStore.getTab(id));
-      const regularIds = targetIds.filter((id) => !pluginViewTabStore.getTab(id));
+      const dataRelayIds = targetIds.filter((id) => dataRelayViewTabStore.getTab(id));
+      const regularIds = targetIds.filter((id) => (
+        !pluginViewTabStore.getTab(id) && !dataRelayViewTabStore.getTab(id)
+      ));
       const canClose = !regularIds.length || await closeTabsBatchImpl(
         () => ({ closeLogView, closeSessions, closeTabsInFlightRef, closeWorkspace, confirmIfBusyLocalTerminal, logViews, sessions, targetIds: regularIds, workspaces }),
         regularIds,
       );
       if (!canClose) return;
       for (const id of pluginIds) pluginViewTabStore.close(id);
+      for (const id of dataRelayIds) dataRelayViewTabStore.close(id);
       if (closingTabIds.has(activeBeforeClose)) activeTabStore.setActiveTabId(focusAfterClose);
     },
     [workspaces, sessions, logViews, confirmIfBusyLocalTerminal, closeWorkspace, closeSessions, closeLogView, orderedTabsWithEditors],
@@ -1045,6 +1068,7 @@ export function AppSideEffects() {
       activeTabStore,
       addConnectionLogRef,
       closePluginViewTab,
+      closeDataRelayViewTab,
       closeSession,
       closeTabInFlightRef,
       closeWorkspace,
@@ -1058,6 +1082,7 @@ export function AppSideEffects() {
       handleRequestCloseEditorTabRef,
       isEditorTabId,
       isPluginViewTabId,
+      isDataRelayViewTabId,
       isQuickSwitcherOpen: isQuickSwitcherOpenRef.current,
       lastMoveFocusTimeRef,
       moveFocusInWorkspace,
@@ -1087,6 +1112,7 @@ export function AppSideEffects() {
   }, [
     setActiveTabId,
     closePluginViewTab,
+    closeDataRelayViewTab,
     closeSession,
     closeWorkspace,
     createLocalTerminalWithCurrentShell,
@@ -1109,6 +1135,7 @@ export function AppSideEffects() {
       workspaceIds: workspaces.map((workspace) => workspace.id),
       logViewIds: logViews.map((logView) => logView.id),
       pluginViewTabIds: pluginViewTabs.map((tab) => tab.id),
+      dataRelayViewTabIds: dataRelayViewTabs.map((tab) => tab.id),
       hasOpenDialog: Boolean(topmostDialogClose),
       closeTabShortcutEnabled: isPrimaryModifierWBinding(closeTabKeyStr, matchesKeyBinding, true),
     });
@@ -1143,7 +1170,7 @@ export function AppSideEffects() {
     }
 
     await netcattyBridge.get()?.windowClose?.();
-  }, [closeLogView, closeTabKeyStr, editorTabs, executeHotkeyAction, logViews, pluginViewTabs, sessions, workspaces]);
+  }, [closeLogView, closeTabKeyStr, editorTabs, executeHotkeyAction, logViews, pluginViewTabs, dataRelayViewTabs, sessions, workspaces]);
 
   useEffect(() => {
     // Cmd/Ctrl+W from the app menu arrives via IPC, not the keydown listener.

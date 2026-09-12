@@ -1048,7 +1048,7 @@ Highlight the focused split pane:
   'dataRelay.browser.empty': 'This folder is empty',
   'dataRelay.browser.parent': 'Parent folder',
   'dataRelay.browser.home': 'Home',
-  'dataRelay.compare.openHint': 'Double-click to open the compare view',
+  'dataRelay.compare.openHint': 'Double-click to open in a new tab',
   'dataRelay.compare.run': 'Compare',
   'dataRelay.compare.copyToDest': 'Copy to destination',
   'dataRelay.compare.copyToSource': 'Copy to source',

@@ -684,7 +684,7 @@ export const zhCNCoreMessages: Messages = {
   'dataRelay.browser.empty': '此目录为空',
   'dataRelay.browser.parent': '上级目录',
   'dataRelay.browser.home': '主目录',
-  'dataRelay.compare.openHint': '双击打开对照页',
+  'dataRelay.compare.openHint': '双击在新标签页中打开',
   'dataRelay.compare.run': '比较',
   'dataRelay.compare.copyToDest': '复制到目标',
   'dataRelay.compare.copyToSource': '复制到源',

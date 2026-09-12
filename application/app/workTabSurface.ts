@@ -3,6 +3,7 @@ import {
   isEditorTabId,
 } from '../state/activeTabStore';
 import { isPluginViewTabId } from '../state/pluginViewTabStore';
+import { isDataRelayViewTabId } from '../state/dataRelayViewTabStore';
 import { applyCustomAccentToTerminalTheme, resolveHostTerminalThemeId } from '../../domain/terminalAppearance';
 import { collectSessionIds } from '../../domain/workspace';
 import type { EditorTabChrome } from '../state/editorTabStore';
@@ -28,7 +29,9 @@ export function isRootPageTabId(activeTabId: string): boolean {
  * HostDetailsPanel when a work tab is active; otherwise deep-link into Vault.
  */
 export function shouldOpenHostEditOnWorkSurface(activeTabId: string): boolean {
-  return !isRootPageTabId(activeTabId) && !isPluginViewTabId(activeTabId);
+  return !isRootPageTabId(activeTabId)
+    && !isPluginViewTabId(activeTabId)
+    && !isDataRelayViewTabId(activeTabId);
 }
 
 export function buildOrderedWorkTabIds(
@@ -89,6 +92,7 @@ export function isHostTreeWorkTabSurface({
   if (!enabled) return false;
   if (isRootPageTabId(activeTabId)) return false;
   if (isPluginViewTabId(activeTabId)) return false;
+  if (isDataRelayViewTabId(activeTabId)) return false;
   return orderedTabs.includes(activeTabId)
     || isEditorTabId(activeTabId)
     || logViewIds.has(activeTabId)

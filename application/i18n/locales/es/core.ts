@@ -1006,7 +1006,7 @@ Resalta el panel dividido enfocado:
   'dataRelay.browser.empty': 'Esta carpeta está vacía',
   'dataRelay.browser.parent': 'Carpeta superior',
   'dataRelay.browser.home': 'Inicio',
-  'dataRelay.compare.openHint': 'Doble clic para abrir la vista de comparación',
+  'dataRelay.compare.openHint': 'Doble clic para abrir en una pestaña nueva',
   'dataRelay.compare.run': 'Comparar',
   'dataRelay.compare.copyToDest': 'Copiar al destino',
   'dataRelay.compare.copyToSource': 'Copiar al origen',

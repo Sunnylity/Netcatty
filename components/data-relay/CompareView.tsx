@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   ArrowLeftRight,
   ArrowUp,
   Folder,
@@ -68,7 +67,6 @@ export interface CompareViewProps {
   >;
   sourceHost?: Host;
   destHost?: Host;
-  onBack: () => void;
   onEdit: () => void;
   onStart: () => void;
   onStop: () => void;
@@ -298,7 +296,6 @@ export const CompareView: React.FC<CompareViewProps> = ({
   terminalSettings,
   sourceHost,
   destHost,
-  onBack,
   onEdit,
   onStart,
   onStop,
@@ -512,19 +509,6 @@ export const CompareView: React.FC<CompareViewProps> = ({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 gap-1 px-2"
-          onClick={() => {
-            persistBrowsePaths();
-            onBack();
-          }}
-        >
-          <ArrowLeft size={14} />
-          {t("common.back")}
-        </Button>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">{rule.label}</div>
           <div className="truncate font-mono text-[11px] text-muted-foreground">

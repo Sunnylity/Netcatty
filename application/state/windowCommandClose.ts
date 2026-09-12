@@ -32,6 +32,7 @@ interface ResolveWindowCommandCloseIntentInput {
   workspaceIds: string[];
   logViewIds: string[];
   pluginViewTabIds?: string[];
+  dataRelayViewTabIds?: string[];
   closeTabShortcutEnabled?: boolean;
   hasOpenDialog?: boolean;
 }
@@ -43,6 +44,7 @@ export function resolveWindowCommandCloseIntent({
   workspaceIds,
   logViewIds,
   pluginViewTabIds = [],
+  dataRelayViewTabIds = [],
   closeTabShortcutEnabled = true,
   hasOpenDialog = false,
 }: ResolveWindowCommandCloseIntentInput): WindowCommandCloseIntent {
@@ -58,7 +60,11 @@ export function resolveWindowCommandCloseIntent({
     return { kind: 'closeWindow' };
   }
 
-  if (editorTabIds.includes(activeTabId) || pluginViewTabIds.includes(activeTabId)) {
+  if (
+    editorTabIds.includes(activeTabId)
+    || pluginViewTabIds.includes(activeTabId)
+    || dataRelayViewTabIds.includes(activeTabId)
+  ) {
     return { kind: 'closeTab' };
   }
 

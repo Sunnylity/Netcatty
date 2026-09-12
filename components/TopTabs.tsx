@@ -33,6 +33,7 @@ import { GlobalSftpTransferCenter } from './GlobalSftpTransferCenter';
 import { TopTabsQuickControls } from './TopTabsQuickControls';
 import {
   ActiveTabAutoScroller,
+  DataRelayTopTab,
   EditorTopTab,
   LogViewTopTab,
   PluginViewTopTab,
@@ -43,6 +44,7 @@ import {
   WorkspaceTopTab,
 } from './top-tabs/TopTabItems';
 import type { PluginViewTab } from '../application/state/pluginViewTabStore';
+import type { DataRelayViewTab } from '../application/state/dataRelayViewTabStore';
 import { TERMINAL_HOST_TREE_ANIMATION_MS } from '../application/state/terminalHostTreeAnimation';
 import {
   scheduleAfterInstantThemeSwitch,
@@ -171,6 +173,8 @@ interface TopTabsProps {
   editorTabs: readonly EditorTabChrome[];
   pluginViewTabs: readonly PluginViewTab[];
   onClosePluginViewTab: (tabId: string) => void;
+  dataRelayViewTabs: readonly DataRelayViewTab[];
+  onCloseDataRelayViewTab: (tabId: string) => void;
   onRequestCloseEditorTab: (editorTabId: string) => void;
   hostById: Map<string, Host>;
 }
@@ -220,6 +224,8 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
   editorTabs,
   pluginViewTabs,
   onClosePluginViewTab,
+  dataRelayViewTabs,
+  onCloseDataRelayViewTab,
   onRequestCloseEditorTab,
   hostById,
 }) => {
@@ -727,6 +733,10 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
     () => new Map(pluginViewTabs.map((tab) => [tab.id, tab])),
     [pluginViewTabs],
   );
+  const dataRelayViewTabMap = useMemo(
+    () => new Map(dataRelayViewTabs.map((tab) => [tab.id, tab])),
+    [dataRelayViewTabs],
+  );
 
   // fileName → count, for the rename-disambiguation suffix in the render loop.
   // Memoed so we don't do a per-tab O(n) filter on every render (was O(n²)).
@@ -747,6 +757,8 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
       }
       const pluginViewTab = pluginViewTabMap.get(tabId);
       if (pluginViewTab) return { type: 'pluginView' as const, id: tabId, pluginViewTab };
+      const dataRelayViewTab = dataRelayViewTabMap.get(tabId);
+      if (dataRelayViewTab) return { type: 'dataRelay' as const, id: tabId, dataRelayViewTab };
       const session = orphanSessionMap.get(tabId);
       const workspace = workspaceMap.get(tabId);
       const logView = logViewMap.get(tabId);
@@ -761,7 +773,7 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
       }
       return null;
     }).filter(Boolean);
-  }, [orderedTabs, editorTabMap, pluginViewTabMap, orphanSessionMap, workspaceMap, logViewMap, workspacePaneCounts]);
+  }, [orderedTabs, editorTabMap, pluginViewTabMap, dataRelayViewTabMap, orphanSessionMap, workspaceMap, logViewMap, workspacePaneCounts]);
 
   // Bulk-close menu items shared by session and workspace context menus.
   // Anchor is the tab the user right-clicked on (matches VSCode/JetBrains UX).
@@ -844,6 +856,31 @@ const TopTabsInner: React.FC<TopTabsProps> = ({
             key={tabId}
             tab={item.pluginViewTab}
             onClose={onClosePluginViewTab}
+            renderBulkCloseItems={renderBulkCloseItems}
+            t={t}
+            isBeingDragged={draggingSessionId === tabId}
+            isDraggingForReorder={isDraggingForReorder}
+            shiftStyle={tabShiftStyles[tabId] || emptyTabStyle}
+            showDropIndicatorBefore={dropIndicator?.tabId === tabId && dropIndicator.position === 'before'}
+            showDropIndicatorAfter={dropIndicator?.tabId === tabId && dropIndicator.position === 'after'}
+            onTabDragStart={handleTabDragStart}
+            onTabDragEnd={handleTabDragEnd}
+            onTabDragOver={handleTabDragOver}
+            onTabDragLeave={handleTabDragLeave}
+            onTabDrop={handleTabDrop}
+            tabAnimationClass={getTabAnimationClass(tabId)}
+            shortcutNumber={tabShortcutNumbers?.get(tabId)}
+          />
+        );
+      }
+
+      if (item.type === 'dataRelay') {
+        const tabId = item.id;
+        return (
+          <DataRelayTopTab
+            key={tabId}
+            tab={item.dataRelayViewTab}
+            onClose={onCloseDataRelayViewTab}
             renderBulkCloseItems={renderBulkCloseItems}
             t={t}
             isBeingDragged={draggingSessionId === tabId}
@@ -1275,6 +1312,8 @@ export const topTabsAreEqual = (prev: TopTabsProps, next: TopTabsProps): boolean
     prev.onRequestCloseEditorTab === next.onRequestCloseEditorTab &&
     prev.pluginViewTabs === next.pluginViewTabs &&
     prev.onClosePluginViewTab === next.onClosePluginViewTab &&
+    prev.dataRelayViewTabs === next.dataRelayViewTabs &&
+    prev.onCloseDataRelayViewTab === next.onCloseDataRelayViewTab &&
     prev.draggingSessionId === next.draggingSessionId &&
     prev.isMacClient === next.isMacClient &&
     prev.onCopySession === next.onCopySession &&

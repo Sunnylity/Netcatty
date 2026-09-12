@@ -687,7 +687,7 @@ export const zhTWCoreMessages: Messages = {
   'dataRelay.browser.empty': '此目錄是空的',
   'dataRelay.browser.parent': '上層目錄',
   'dataRelay.browser.home': '主目錄',
-  'dataRelay.compare.openHint': '按兩下開啟對照頁',
+  'dataRelay.compare.openHint': '按兩下在新分頁中開啟',
   'dataRelay.compare.run': '比較',
   'dataRelay.compare.copyToDest': '複製到目標',
   'dataRelay.compare.copyToSource': '複製到來源',

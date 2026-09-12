@@ -1,14 +1,15 @@
 import { LayoutGrid, List as ListIcon, Play, Plus, Square, Waypoints } from 'lucide-react';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../application/i18n/I18nProvider';
+import { usePublishDataRelayRuntime } from '../application/state/dataRelayRuntimeStore';
+import { dataRelayViewTabStore } from '../application/state/dataRelayViewTabStore';
 import {
   useDataRelayState,
   type UseDataRelayStateOptions,
 } from '../application/state/useDataRelayState';
 import { DataRelayRule, Host, Identity, KnownHost, SSHKey } from '../domain/models';
-import { buildDataRelayBrowsePathUpdate } from '../domain/dataRelayPaths';
 import { cn } from '../lib/utils';
-import { RuleCard, RuleFormPanel, CompareView } from './data-relay';
+import { RuleCard, RuleFormPanel } from './data-relay';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { toast } from './ui/toast';
@@ -38,6 +39,7 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
   onOpenTerminalAtPath,
 }) => {
   const { t } = useI18n();
+  const relayState = useDataRelayState({ hosts, keys, identities, knownHosts, terminalSettings });
   const {
     rules,
     viewMode,
@@ -50,13 +52,17 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
     stopRule,
     startAllRules,
     stopAllRules,
-  } = useDataRelayState({ hosts, keys, identities, knownHosts, terminalSettings });
+  } = relayState;
+  usePublishDataRelayRuntime(relayState);
 
   const [search, setSearch] = useState('');
   const [panelMode, setPanelMode] = useState<'new' | 'edit' | null>(null);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Partial<DataRelayRule>>({});
-  const [compareRuleId, setCompareRuleId] = useState<string | null>(null);
+
+  useEffect(() => {
+    dataRelayViewTabStore.syncRules(rules.map((rule) => ({ id: rule.id, label: rule.label })));
+  }, [rules]);
 
   const hostsById = useMemo(() => {
     const map = new Map<string, Host>();
@@ -103,10 +109,6 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
     setDraft({});
   }, []);
 
-  const compareRule = compareRuleId
-    ? rules.find((rule) => rule.id === compareRuleId) ?? null
-    : null;
-
   const draftIsValid = Boolean(
     draft.sourceHostId
     && (draft.sourcePath?.trim() || draft.sourceCommand?.trim())
@@ -152,16 +154,6 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
     [stopRule],
   );
 
-  const persistCompareBrowsePaths = useCallback((paths: { sourcePath?: string; destPath?: string }) => {
-    if (!compareRuleId) return;
-    const rule = rules.find((item) => item.id === compareRuleId);
-    if (!rule) return;
-    const update = buildDataRelayBrowsePathUpdate(rule, paths);
-    if (!update) return;
-    const result = updateRule(rule.id, update, { preserveRuntime: true });
-    if (!result.ok && result.error) toast.error(result.error);
-  }, [compareRuleId, rules, updateRule]);
-
   const persistScanSettings = useCallback((
     ruleId: string,
     updates: Partial<DataRelayRule> & { scanCheckpoint?: DataRelayRule["scanCheckpoint"] | null },
@@ -172,27 +164,6 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      {compareRule ? (
-        <CompareView
-          key={compareRule.id}
-          rule={compareRule}
-          hosts={hosts}
-          keys={keys}
-          identities={identities}
-          knownHosts={knownHosts}
-          terminalSettings={terminalSettings}
-          sourceHost={hostsById.get(compareRule.sourceHostId)}
-          destHost={hostsById.get(compareRule.destHostId)}
-          onBack={() => setCompareRuleId(null)}
-          onEdit={() => openEditPanel(compareRule)}
-          onStart={() => void handleStart(compareRule.id)}
-          onStop={() => void handleStop(compareRule.id)}
-          onScanSettingsChange={(updates) => persistScanSettings(compareRule.id, updates)}
-          onOpenTerminalAtPath={onOpenTerminalAtPath}
-          onPersistBrowsePaths={persistCompareBrowsePaths}
-        />
-      ) : (
-        <>
       <VaultPageHeader dataSection="vault-data-relay">
         <span className={cn(vaultSectionTitleClass, 'hidden md:inline')}>
           {t('vault.nav.dataRelay')}
@@ -278,15 +249,13 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
                 onStart={() => void handleStart(rule.id)}
                 onStop={() => void handleStop(rule.id)}
                 onEdit={() => openEditPanel(rule)}
-                onOpen={() => setCompareRuleId(rule.id)}
+                onOpen={() => dataRelayViewTabStore.open(rule)}
                 onScanSettingsChange={(updates) => persistScanSettings(rule.id, updates)}
               />
             ))}
           </div>
         )}
       </div>
-        </>
-      )}
 
       {panelMode && (
         <RuleFormPanel
@@ -317,7 +286,6 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
             panelMode === 'edit' && editingRuleId
               ? () => {
                   deleteRule(editingRuleId);
-                  if (compareRuleId === editingRuleId) setCompareRuleId(null);
                   closePanel();
                 }
               : undefined

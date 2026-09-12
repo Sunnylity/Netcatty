@@ -85,6 +85,7 @@ test('host edit overlay prefers work-surface editor except on vault/sftp/plugin 
   assert.equal(shouldOpenHostEditOnWorkSurface('vault'), false);
   assert.equal(shouldOpenHostEditOnWorkSurface('sftp'), false);
   assert.equal(shouldOpenHostEditOnWorkSurface('plugin-view:demo'), false);
+  assert.equal(shouldOpenHostEditOnWorkSurface('data-relay:rule-1'), false);
 });
 
 test('shared host tree is visible for editor, log, session, and workspace tabs', () => {
@@ -122,6 +123,17 @@ test('shared host tree stays hidden for native plugin view tabs', () => {
     enabled: true,
     activeTabId: pluginTabId,
     orderedTabs: [pluginTabId],
+    sessionIds: new Set(),
+    workspaceIds: new Set(),
+  }), false);
+});
+
+test('shared host tree stays hidden for data-relay rule tabs', () => {
+  const tabId = 'data-relay:rule-1';
+  assert.equal(isHostTreeWorkTabSurface({
+    enabled: true,
+    activeTabId: tabId,
+    orderedTabs: [tabId],
     sessionIds: new Set(),
     workspaceIds: new Set(),
   }), false);

@@ -1031,7 +1031,7 @@ export const ruCoreMessages: Messages = {
   'dataRelay.browser.empty': 'Эта папка пуста',
   'dataRelay.browser.parent': 'Родительская папка',
   'dataRelay.browser.home': 'Домашняя папка',
-  'dataRelay.compare.openHint': 'Дважды щёлкните, чтобы открыть сравнение',
+  'dataRelay.compare.openHint': 'Дважды щёлкните, чтобы открыть в новой вкладке',
   'dataRelay.compare.run': 'Сравнить',
   'dataRelay.compare.copyToDest': 'Копировать в назначение',
   'dataRelay.compare.copyToSource': 'Копировать в источник',
