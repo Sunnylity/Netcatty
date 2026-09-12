@@ -201,6 +201,19 @@ export interface Host {
   createdAt?: number; // Timestamp when host was created
   startupCommand?: string;
   startupCommandRunMode?: MultiLineRunMode;
+  /**
+   * Optional remote shell command used to replace the interactive shell the
+   * SSH server would otherwise start from its `DefaultShell` setting.
+   *
+   * When set, the session channel is opened with `exec` + PTY instead of
+   * `shell`, so the configured program *replaces* the login shell rather than
+   * nesting inside it — exiting it closes the tab, and there is no leftover
+   * parent process. Useful on Windows OpenSSH hosts to run e.g. Git Bash even
+   * when `HKLM\SOFTWARE\OpenSSH\DefaultShell` points at cmd/PowerShell.
+   *
+   * Empty/unset keeps the previous behavior (`conn.shell()` only).
+   */
+  remoteShellCommand?: string;
   /** Script id (kind=script) to run automatically after connect. */
   loginScriptId?: string;
   /** Ordered onConnect script IDs for this host (canonical run order). */
@@ -423,6 +436,12 @@ export interface GroupConfig {
   hostChain?: HostChainConfig;
   startupCommand?: string;
   startupCommandRunMode?: MultiLineRunMode;
+  /**
+   * Per-group override for the interactive session channel: when set, the
+   * session opens with `exec` + PTY so this program replaces the server's
+   * `DefaultShell` (e.g. Git Bash on a Windows OpenSSH host).
+   */
+  remoteShellCommand?: string;
   loginScriptId?: string;
   legacyAlgorithms?: boolean;
   skipEcdsaHostKey?: boolean;

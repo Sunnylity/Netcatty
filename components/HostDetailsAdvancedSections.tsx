@@ -805,6 +805,23 @@ export const HostDetailsAdvancedSections: React.FC<HostDetailsAdvancedSectionsPr
             </Select>
           </HostDetailsSettingRow>
         </HostDetailsSection>
+
+        {/* Remote shell command (replaces the server's DefaultShell) */}
+        <HostDetailsSection
+          icon={<TerminalSquare size={14} className="text-muted-foreground" />}
+          title={t("hostDetails.remoteShellCommand")}
+          hint={t("hostDetails.remoteShellCommand.help")}
+        >
+          <Input
+            placeholder={effectiveGroupDefaults?.remoteShellCommand || t("hostDetails.remoteShellCommand.placeholder")}
+            value={form.remoteShellCommand || ""}
+            onChange={(e) => update("remoteShellCommand", e.target.value)}
+            className="font-mono text-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            {t("hostDetails.remoteShellCommand.emptyHint")}
+          </p>
+        </HostDetailsSection>
   </>
   );
 };

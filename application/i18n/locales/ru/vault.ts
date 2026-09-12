@@ -1017,6 +1017,12 @@ export const ruVaultMessages: Messages = {
   'hostDetails.startupCommand.runMode.help': 'Выберите, как отправлять многострочные команды запуска после подключения.',
   'hostDetails.startupCommand.runMode.lineDelay': 'Отправлять построчно',
   'hostDetails.startupCommand.runMode.paste': 'Отправить сразу',
+  'hostDetails.remoteShellCommand': 'Команда удалённой оболочки',
+  'hostDetails.remoteShellCommand.placeholder': 'напр. C:\\PROGRA~1\\Git\\bin\\bash.exe -l',
+  'hostDetails.remoteShellCommand.help':
+    'Запускает эту программу вместо оболочки, которую сервер SSH запускает по умолчанию. При выходе из неё вкладка закрывается.',
+  'hostDetails.remoteShellCommand.emptyHint':
+    'Оставьте пустым, чтобы использовать значение сервера (DefaultShell в OpenSSH). На хостах Windows по умолчанию это cmd.exe.',
   'hostDetails.otherProtocols': 'Другие протоколы',
   'hostDetails.telnetOn': 'Telnet на',
   'hostDetails.port': 'порт',

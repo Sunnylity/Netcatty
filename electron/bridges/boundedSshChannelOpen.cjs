@@ -149,7 +149,16 @@ function openBoundedSshChannel(sshClient, invoke, options = {}) {
   });
 }
 
-async function openBoundedSshShell(sshClient, windowOptions, shellOptions, options = {}) {
+/**
+ * Rate-limit-aware session channel open shared by the interactive `shell` path
+ * and the `exec`-with-PTY ("remote shell command") path. `invoke` receives the
+ * ssh2 callback and issues the real channel request, so the two callers differ
+ * only in which ssh2 primitive they call.
+ *
+ * Bastions reject rapid session opens with a distinctive error; the loop below
+ * retries those with a growing backoff while every other error propagates.
+ */
+async function openBoundedSessionChannel(sshClient, invoke, options = {}) {
   const hasRateLimitRetryTimeout = Number.isFinite(options.rateLimitRetryTimeoutMs);
   const hasExplicitRateLimitRetries = Number.isFinite(options.rateLimitRetries);
   const rateLimitRetries = Math.max(
@@ -173,6 +182,7 @@ async function openBoundedSshShell(sshClient, windowOptions, shellOptions, optio
   const retryDeadline = rateLimitRetryTimeoutMs === null
     ? null
     : retryStartedAt + rateLimitRetryTimeoutMs;
+  const timeoutCode = options.timeoutCode || "SSH_CHANNEL_OPEN_TIMEOUT";
   let attempt = 0;
   let lastRateLimitError = null;
 
@@ -201,7 +211,7 @@ async function openBoundedSshShell(sshClient, windowOptions, shellOptions, optio
     try {
       return await openBoundedSshChannel(
         sshClient,
-        (callback) => sshClient.shell(windowOptions, shellOptions, callback),
+        invoke,
         {
           ...options,
           timeoutMs: attemptTimeoutMs,
@@ -209,13 +219,13 @@ async function openBoundedSshShell(sshClient, windowOptions, shellOptions, optio
             ? false
             : options.invalidateOnTimeout,
           label: options.label || "SSH shell channel open",
-          timeoutCode: "SSH_SHELL_OPEN_TIMEOUT",
+          timeoutCode,
         },
       );
     } catch (error) {
       if (
         retryBudgetConstrainsAttempt
-        && error?.code === "SSH_SHELL_OPEN_TIMEOUT"
+        && error?.code === timeoutCode
         && lastRateLimitError
       ) {
         throw lastRateLimitError;
@@ -238,10 +248,57 @@ async function openBoundedSshShell(sshClient, windowOptions, shellOptions, optio
         nextDelayMs,
         sleepFn,
         options.signal,
-        options.label || "SSH shell channel retry",
+        options.retryLabel || options.label || "SSH shell channel retry",
       );
     }
   }
+}
+
+function openBoundedSshShell(sshClient, windowOptions, shellOptions, options = {}) {
+  return openBoundedSessionChannel(
+    sshClient,
+    (callback) => sshClient.shell(windowOptions, shellOptions, callback),
+    {
+      ...options,
+      label: options.label || "SSH shell channel open",
+      timeoutCode: "SSH_SHELL_OPEN_TIMEOUT",
+    },
+  );
+}
+
+/**
+ * Open a session channel that runs `command` with a PTY attached, so the
+ * program *replaces* the interactive shell the server would otherwise start
+ * from its `DefaultShell` setting. Used for per-host "remote shell command"
+ * overrides (e.g. running Git Bash on a Windows OpenSSH host whose DefaultShell
+ * is cmd).
+ *
+ * Marked async to match `openBoundedSshShell`, so both reject rather than throw
+ * synchronously and callers can share the same error handling.
+ */
+async function openBoundedSshExecShell(
+  sshClient,
+  command,
+  windowOptions,
+  envOptions,
+  options = {},
+) {
+  return openBoundedSessionChannel(
+    sshClient,
+    (callback) => sshClient.exec(
+      command,
+      {
+        ...envOptions,
+        pty: windowOptions,
+      },
+      callback,
+    ),
+    {
+      ...options,
+      label: options.label || "SSH remote shell command channel open",
+      timeoutCode: "SSH_REMOTE_SHELL_OPEN_TIMEOUT",
+    },
+  );
 }
 
 function openBoundedForwardOut(
@@ -302,6 +359,20 @@ function openBoundedSshShellCallback(
   );
 }
 
+function openBoundedSshExecShellCallback(
+  sshClient,
+  command,
+  windowOptions,
+  envOptions,
+  callback,
+  options = {},
+) {
+  deliverChannelOpenCallback(
+    openBoundedSshExecShell(sshClient, command, windowOptions, envOptions, options),
+    callback,
+  );
+}
+
 function openBoundedForwardOutCallback(
   sshClient,
   sourceAddress,
@@ -344,8 +415,11 @@ module.exports = {
   closeLateChannel,
   isSshChannelOpenRateLimitedError,
   openBoundedSshChannel,
+  openBoundedSessionChannel,
   openBoundedSshShell,
   openBoundedSshShellCallback,
+  openBoundedSshExecShell,
+  openBoundedSshExecShellCallback,
   openBoundedForwardOut,
   openBoundedForwardOutCallback,
   openBoundedForwardIn,

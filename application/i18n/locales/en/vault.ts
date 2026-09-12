@@ -984,6 +984,12 @@ export const enVaultMessages: Messages = {
   'hostDetails.startupCommand.runMode.help': 'Choose how multi-line startup commands are sent after connection.',
   'hostDetails.startupCommand.runMode.lineDelay': 'Send line by line',
   'hostDetails.startupCommand.runMode.paste': 'Send all at once',
+  'hostDetails.remoteShellCommand': 'Remote shell command',
+  'hostDetails.remoteShellCommand.placeholder': 'e.g., C:\\PROGRA~1\\Git\\bin\\bash.exe -l',
+  'hostDetails.remoteShellCommand.help':
+    'Run this program instead of the shell the SSH server would normally start. Exiting it closes the tab.',
+  'hostDetails.remoteShellCommand.emptyHint':
+    'Leave empty to use the server default (OpenSSH DefaultShell). On Windows hosts this is cmd.exe unless configured otherwise.',
   'hostDetails.otherProtocols': 'Other Protocols',
   'hostDetails.telnetOn': 'Telnet on',
   'hostDetails.port': 'port',

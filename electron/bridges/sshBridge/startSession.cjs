@@ -15,7 +15,10 @@ const {
 } = require("../terminalInterruptDiagnostics.cjs");
 const { runWhenProxyConnectionReady } = require("../proxyUtils.cjs");
 const { getAttachHomeWebContentsId } = require("../terminalAttachRestore.cjs");
-const { openBoundedSshShellCallback } = require("../boundedSshChannelOpen.cjs");
+const {
+  openBoundedSshShellCallback,
+  openBoundedSshExecShellCallback,
+} = require("../boundedSshChannelOpen.cjs");
 const { listInteractiveShellPids: listInteractiveShellPidsShared } = require("../sshInteractiveShells.cjs");
 const {
   shouldConfirmReusedShellLiveness,
@@ -157,6 +160,59 @@ function shouldPromoteCachedAuthMethod(authMethod, cachedMethod) {
   return true;
 }
 
+/**
+ * Normalized per-host remote shell command, or "" when unset.
+ *
+ * When set, the interactive session channel is opened with `exec` + PTY so this
+ * program *replaces* the login shell the server would otherwise start from its
+ * `DefaultShell` setting — exiting it closes the tab instead of dropping back
+ * into a parent shell. Intended for hosts like Windows OpenSSH where
+ * DefaultShell is cmd/PowerShell but the user wants e.g. Git Bash.
+ */
+function resolveRemoteShellCommand(options) {
+  const raw = options?.remoteShellCommand;
+  if (typeof raw !== "string") return "";
+  return raw.trim();
+}
+
+/**
+ * Shell-PID discovery reads POSIX process tables (`ps` / `/proc`), which is
+ * meaningless for an arbitrary remote program overriding the login shell. Treat
+ * a remote shell command like `skipShellPidDiscovery`.
+ */
+function shouldSkipShellPidDiscovery(options) {
+  return Boolean(options?.skipShellPidDiscovery) || resolveRemoteShellCommand(options) !== "";
+}
+
+/**
+ * Open the interactive session channel for a tab.
+ *
+ * Default: a `shell` request, so the server decides (its `DefaultShell`).
+ * Override: an `exec` request carrying a PTY, running the host's configured
+ * remote shell command. Both share the same rate-limit retry machinery and the
+ * same `(err, stream)` callback contract.
+ */
+function openInteractiveChannel(
+  sshClient,
+  { windowOptions, shellOptions, remoteShellCommand },
+  callback,
+  options = {},
+) {
+  const command = typeof remoteShellCommand === "string" ? remoteShellCommand.trim() : "";
+  if (command) {
+    openBoundedSshExecShellCallback(
+      sshClient,
+      command,
+      windowOptions,
+      { env: shellOptions?.env },
+      callback,
+      options,
+    );
+    return;
+  }
+  openBoundedSshShellCallback(sshClient, windowOptions, shellOptions, callback, options);
+}
+
 async function applyAgentForwarding(
   options,
   connectOpts,
@@ -218,7 +274,7 @@ function createStartSessionApi(ctx) {
     };
 
     const ensureConcurrentJoinShellIdentity = async (connRef, options) => {
-      if (!connRef || options.skipShellPidDiscovery) return true;
+      if (!connRef || shouldSkipShellPidDiscovery(options)) return true;
 
       const current = [...sessions.entries()].filter(([, candidate]) => (
         candidate?.connRef === connRef
@@ -824,14 +880,17 @@ function createStartSessionApi(ctx) {
 
         try {
           const rateLimitBackoffMs = Number(options.sshChannelOpenRateLimitBackoffMs);
-          openBoundedSshShellCallback(
+          openInteractiveChannel(
             conn,
             {
-              term: "xterm-256color",
-              cols,
-              rows,
+              windowOptions: {
+                term: "xterm-256color",
+                cols,
+                rows,
+              },
+              shellOptions,
+              remoteShellCommand: options.remoteShellCommand,
             },
-            shellOptions,
             (err, stream) => {
               cleanupConnectionGuard();
               if (settled) {
@@ -931,7 +990,7 @@ function createStartSessionApi(ctx) {
               };
 
               const discoverCopiedShellPid = async (copiedSession) => {
-                if (options.skipShellPidDiscovery) return null;
+                if (shouldSkipShellPidDiscovery(options)) return null;
                 const liveBaseline = () => [...sessions.values()]
                   .filter((candidate) => (
                     candidate?.connRef === connRef
@@ -2257,14 +2316,17 @@ function createStartSessionApi(ctx) {
               };
             }
 
-            openBoundedSshShellCallback(
+            openInteractiveChannel(
               conn,
               {
-                term: "xterm-256color",
-                cols,
-                rows,
+                windowOptions: {
+                  term: "xterm-256color",
+                  cols,
+                  rows,
+                },
+                shellOptions,
+                remoteShellCommand: options.remoteShellCommand,
               },
-              shellOptions,
               (err, stream) => {
                 if (err) {
                   log("shell open failed", { sessionId, hostname: options.hostname, error: err.message });
@@ -2656,4 +2718,8 @@ module.exports = {
   shouldPromoteCachedAuthMethod,
   applyAgentForwarding,
   prepareAgentForwardingOptions,
+  // Remote shell command (exec + PTY) override for interactive sessions.
+  resolveRemoteShellCommand,
+  shouldSkipShellPidDiscovery,
+  openInteractiveChannel,
 };

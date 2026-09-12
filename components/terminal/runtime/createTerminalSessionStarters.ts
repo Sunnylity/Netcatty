@@ -674,6 +674,10 @@ export const createTerminalSessionStarters = (ctx: TerminalSessionStartersContex
           cols: term.cols,
           rows: term.rows,
           charset: ctx.host.charset,
+          // Optional per-host override for the remote interactive shell. When
+          // set, the bridge opens the session with `exec` + PTY so this program
+          // replaces the server's DefaultShell instead of nesting inside it.
+          remoteShellCommand: ctx.host.remoteShellCommand,
           // Persist for session-backed SFTP opens (AI tools / clipboard paste).
           sftpFileProtocol: ctx.host.sftpFileProtocol || "auto",
           env: termEnv,

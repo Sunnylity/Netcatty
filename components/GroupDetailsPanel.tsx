@@ -101,7 +101,7 @@ export const hasGroupSshFields = (c: Partial<GroupConfig>): boolean =>
   c.port !== undefined || !!c.username || !!c.password || !!c.identityFileId ||
   c.deviceType !== undefined ||
   c.agentForwarding !== undefined || c.authMethod !== undefined || c.identityId !== undefined ||
-  !!c.proxyProfileId || !!c.proxyConfig || !!c.hostChain || !!c.startupCommand || c.startupCommandRunMode !== undefined || c.legacyAlgorithms !== undefined || c.skipEcdsaHostKey !== undefined || c.algorithms !== undefined || c.backspaceBehavior !== undefined ||
+  !!c.proxyProfileId || !!c.proxyConfig || !!c.hostChain || !!c.startupCommand || c.startupCommandRunMode !== undefined || !!c.remoteShellCommand || c.legacyAlgorithms !== undefined || c.skipEcdsaHostKey !== undefined || c.algorithms !== undefined || c.backspaceBehavior !== undefined ||
   Boolean(c.environmentVariables && c.environmentVariables.length > 0) ||
   c.moshEnabled !== undefined || !!c.moshServerPath ||
   c.etEnabled !== undefined || c.etPort !== undefined ||
@@ -262,6 +262,7 @@ const GroupDetailsPanel: React.FC<GroupDetailsPanelPropsWithResize> = ({
       delete next.agentForwarding;
       delete next.startupCommand;
       delete next.startupCommandRunMode;
+      delete next.remoteShellCommand;
       delete next.legacyAlgorithms;
       delete next.skipEcdsaHostKey;
       delete next.algorithms;
@@ -562,6 +563,7 @@ const GroupDetailsPanel: React.FC<GroupDetailsPanelPropsWithResize> = ({
         ...(form.agentForwarding !== undefined && { agentForwarding: form.agentForwarding }),
         ...(form.startupCommand !== undefined && { startupCommand: form.startupCommand }),
         ...(form.startupCommandRunMode !== undefined && { startupCommandRunMode: form.startupCommandRunMode }),
+        ...(form.remoteShellCommand !== undefined && { remoteShellCommand: form.remoteShellCommand }),
         ...(form.legacyAlgorithms !== undefined && { legacyAlgorithms: form.legacyAlgorithms }),
         ...(form.skipEcdsaHostKey !== undefined && { skipEcdsaHostKey: form.skipEcdsaHostKey }),
         ...(form.algorithms !== undefined && { algorithms: form.algorithms }),

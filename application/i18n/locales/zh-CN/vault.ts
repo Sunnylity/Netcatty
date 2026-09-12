@@ -365,6 +365,12 @@ export const zhCNVaultMessages: Messages = {
   'hostDetails.startupCommand.runMode.help': '选择连接后如何发送多行启动命令。',
   'hostDetails.startupCommand.runMode.lineDelay': '逐行发送',
   'hostDetails.startupCommand.runMode.paste': '一次性发送',
+  'hostDetails.remoteShellCommand': '远端 Shell 命令',
+  'hostDetails.remoteShellCommand.placeholder': '例如 C:\\PROGRA~1\\Git\\bin\\bash.exe -l',
+  'hostDetails.remoteShellCommand.help':
+    '运行此程序来替代 SSH 服务端默认启动的 Shell。退出该程序即关闭标签页。',
+  'hostDetails.remoteShellCommand.emptyHint':
+    '留空则使用服务端默认值（OpenSSH 的 DefaultShell）。Windows 主机未配置时通常为 cmd.exe。',
   'hostDetails.otherProtocols': '其他协议',
   'hostDetails.telnetOn': 'Telnet on',
   'hostDetails.port': '端口',

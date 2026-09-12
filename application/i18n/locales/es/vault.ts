@@ -984,6 +984,12 @@ export const esVaultMessages: Messages = {
   'hostDetails.startupCommand.runMode.help': 'Elige cómo se envían los comandos de inicio multilínea después de la conexión.',
   'hostDetails.startupCommand.runMode.lineDelay': 'Enviar línea por línea',
   'hostDetails.startupCommand.runMode.paste': 'Enviar todo de una vez',
+  'hostDetails.remoteShellCommand': 'Comando de shell remoto',
+  'hostDetails.remoteShellCommand.placeholder': 'p. ej., C:\\PROGRA~1\\Git\\bin\\bash.exe -l',
+  'hostDetails.remoteShellCommand.help':
+    'Ejecuta este programa en lugar del shell que el servidor SSH iniciaría por defecto. Al salir de él se cierra la pestaña.',
+  'hostDetails.remoteShellCommand.emptyHint':
+    'Déjalo vacío para usar el valor del servidor (DefaultShell de OpenSSH). En hosts Windows suele ser cmd.exe si no se configura.',
   'hostDetails.otherProtocols': 'Otros protocolos',
   'hostDetails.telnetOn': 'Telnet activado',
   'hostDetails.port': 'puerto',

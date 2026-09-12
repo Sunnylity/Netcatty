@@ -365,6 +365,12 @@ export const zhTWVaultMessages: Messages = {
   'hostDetails.startupCommand.runMode.help': '選擇連線後如何傳送多行啟動指令。',
   'hostDetails.startupCommand.runMode.lineDelay': '逐行傳送',
   'hostDetails.startupCommand.runMode.paste': '一次性傳送',
+  'hostDetails.remoteShellCommand': '遠端 Shell 指令',
+  'hostDetails.remoteShellCommand.placeholder': '例如 C:\\PROGRA~1\\Git\\bin\\bash.exe -l',
+  'hostDetails.remoteShellCommand.help':
+    '執行此程式來取代 SSH 伺服端預設啟動的 Shell。結束該程式即關閉分頁。',
+  'hostDetails.remoteShellCommand.emptyHint':
+    '留空則使用伺服端預設值（OpenSSH 的 DefaultShell）。Windows 主機未設定時通常為 cmd.exe。',
   'hostDetails.otherProtocols': '其他協定',
   'hostDetails.telnetOn': 'Telnet on',
   'hostDetails.port': '埠',

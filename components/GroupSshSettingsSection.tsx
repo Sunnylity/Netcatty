@@ -425,6 +425,19 @@ export const GroupSshSettingsSection: React.FC<GroupSshSettingsSectionProps> = (
               </Select>
             </HostDetailsSettingRow>
 
+            {/* Remote shell command — replaces the server's DefaultShell by
+                opening the session with exec + PTY (e.g. Git Bash on a
+                Windows OpenSSH host whose DefaultShell is cmd). */}
+            <Input
+              placeholder={t("hostDetails.remoteShellCommand.placeholder")}
+              value={form.remoteShellCommand || ""}
+              onChange={(e) => update("remoteShellCommand", e.target.value || undefined)}
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("hostDetails.remoteShellCommand.emptyHint")}
+            </p>
+
             {/* Display the *effective* value (this group's field falling
                 back to the resolved parent default). Same rationale as
                 in HostDetailsPanel — without the fallback, a child group

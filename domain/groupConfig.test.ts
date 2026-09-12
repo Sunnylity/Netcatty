@@ -55,6 +55,32 @@ test("applyGroupDefaults inherits startup command run mode", () => {
   assert.equal(result.startupCommandRunMode, "paste");
 });
 
+test("applyGroupDefaults inherits a group remote shell command", () => {
+  const result = applyGroupDefaults(host(), {
+    remoteShellCommand: "C:\\PROGRA~1\\Git\\bin\\bash.exe -l",
+  });
+
+  assert.equal(result.remoteShellCommand, "C:\\PROGRA~1\\Git\\bin\\bash.exe -l");
+});
+
+test("applyGroupDefaults lets the host remote shell command override the group one", () => {
+  const result = applyGroupDefaults(
+    host({ remoteShellCommand: "bash -l" }),
+    { remoteShellCommand: "C:\\PROGRA~1\\Git\\bin\\bash.exe -l" },
+  );
+
+  assert.equal(result.remoteShellCommand, "bash -l");
+});
+
+test("resolveGroupDefaults lets a child group remote shell command override the parent", () => {
+  const resolved = resolveGroupDefaults("prod/win", [
+    { path: "prod", remoteShellCommand: "bash -l" },
+    { path: "prod/win", remoteShellCommand: "C:\\PROGRA~1\\Git\\bin\\bash.exe -l" },
+  ]);
+
+  assert.equal(resolved.remoteShellCommand, "C:\\PROGRA~1\\Git\\bin\\bash.exe -l");
+});
+
 test("resolveGroupDefaults lets child group device type override parent device type", () => {
   const resolved = resolveGroupDefaults("prod/access", [
     {
