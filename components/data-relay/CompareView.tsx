@@ -334,6 +334,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
     runCompare,
     copySelection,
     cancelCompare,
+    refreshBoth,
   } = useDataRelayCompareSession({
     active: true,
     rule,
@@ -413,6 +414,24 @@ export const CompareView: React.FC<CompareViewProps> = ({
   persistBrowsePathsRef.current = persistBrowsePaths;
   const runningRef = useRef(running);
   runningRef.current = running;
+
+  // Folder scans copy in background SFTP sessions; without a re-list the
+  // panes keep showing pre-transfer listings, which reads as "nothing was
+  // transferred". Each completed pass bumps rule.lastUsedAt via the active
+  // status patch, so follow it with a light pane refresh.
+  const lastScanPassRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!running) {
+      lastScanPassRef.current = null;
+      return;
+    }
+    const signal = rule.lastUsedAt ?? null;
+    if (signal === null || signal === lastScanPassRef.current) return;
+    const firstObservation = lastScanPassRef.current === null;
+    lastScanPassRef.current = signal;
+    if (firstObservation || comparing || copying) return;
+    void refreshBoth();
+  }, [rule.lastUsedAt, running, comparing, copying, refreshBoth]);
 
   const browsePathUpdate = left.ready || right.ready
     ? buildDataRelayBrowsePathUpdate(rule, {

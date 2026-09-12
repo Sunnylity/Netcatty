@@ -353,31 +353,57 @@ export function useDataRelayFolderScan({
     }
 
     void (async () => {
-      while (!session.cancelled) {
-        const current = getRuleRef.current(ruleId);
-        if (!current) break;
-        const startedAt = Date.now();
-        try {
-          const result = await runPass(current, session);
+      try {
+        let missingRuleRetries = 0;
+        while (!session.cancelled) {
+          const current = getRuleRef.current(ruleId);
+          if (!current) {
+            // The rule can be momentarily absent while rule state transitions
+            // settle (runtime store handoff, bulk rules reload). Give it a
+            // short grace period instead of killing the scan: a dead session
+            // left behind blocks restarts and leaks both SFTP channels.
+            if (missingRuleRetries >= 5) break;
+            missingRuleRetries += 1;
+            await sleep(session, 1_000);
+            continue;
+          }
+          missingRuleRetries = 0;
+          const startedAt = Date.now();
+          try {
+            const result = await runPass(current, session);
+            if (session.cancelled) break;
+            onStatusRef.current(
+              ruleId,
+              "active",
+              result && result.failed > 0
+                ? `Failed to copy ${result.failed} file(s).`
+                : undefined,
+            );
+          } catch (err) {
+            if (session.cancelled) break;
+            onStatusRef.current(
+              ruleId,
+              "active",
+              err instanceof Error ? err.message : String(err),
+            );
+          }
           if (session.cancelled) break;
-          onStatusRef.current(
-            ruleId,
-            "active",
-            result && result.failed > 0
-              ? `Failed to copy ${result.failed} file(s).`
-              : undefined,
-          );
-        } catch (err) {
-          if (session.cancelled) break;
-          onStatusRef.current(
-            ruleId,
-            "active",
-            err instanceof Error ? err.message : String(err),
-          );
+          const interval = normalizeDataRelayScanIntervalMs(getRuleRef.current(ruleId)?.scanIntervalMs);
+          await sleep(session, remainingDataRelayScanDelayMs(interval, Date.now() - startedAt));
         }
-        if (session.cancelled) break;
-        const interval = normalizeDataRelayScanIntervalMs(getRuleRef.current(ruleId)?.scanIntervalMs);
-        await sleep(session, remainingDataRelayScanDelayMs(interval, Date.now() - startedAt));
+      } finally {
+        // A finished loop must always remove its session: startScan() treats
+        // any non-cancelled entry as "already running" and would silently
+        // refuse to restart the rule until the owning view unmounts.
+        sessionsRef.current.delete(ruleId);
+        const sourceId = session.sourceSftpId;
+        const destId = session.destSftpId;
+        session.sourceSftpId = null;
+        session.destSftpId = null;
+        if (!session.cancelled) {
+          // stopScan() already released both channels when it cancelled us.
+          await Promise.all([releaseSftp(sourceId), releaseSftp(destId)]);
+        }
       }
     })();
 
