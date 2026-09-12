@@ -1050,8 +1050,6 @@ Highlight the focused split pane:
   'dataRelay.browser.home': 'Home',
   'dataRelay.compare.openHint': 'Double-click to open in a new tab',
   'dataRelay.compare.run': 'Compare',
-  'dataRelay.compare.savePaths': 'Save sync folders',
-  'dataRelay.compare.pathsSaved': 'Sync folders updated',
   'dataRelay.compare.copyToDest': 'Copy to destination',
   'dataRelay.compare.copyToSource': 'Copy to source',
   'dataRelay.compare.syncInfo': 'Synchronization',

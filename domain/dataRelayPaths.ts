@@ -25,36 +25,6 @@ export function toDataRelayDirectoryHint(path: string): string {
   return usesWindowsDataRelayPath(trimmed) ? `${trimmed}\\` : `${trimmed}/`;
 }
 
-export function dataRelayFolderPathsEqual(a: string | undefined, b: string | undefined): boolean {
-  return stripDataRelayTrailingSep(a || "") === stripDataRelayTrailingSep(b || "");
-}
-
-export function toPersistedDataRelayFolderPath(path: string): string {
-  const stripped = stripDataRelayTrailingSep(path.trim());
-  if (!stripped) return "";
-  return toDataRelayDirectoryHint(stripped);
-}
-
-export function buildDataRelayBrowsePathUpdate(
-  rule: { sourcePath?: string; destPath: string },
-  opened: { sourcePath?: string; destPath?: string },
-): { sourcePath?: string; destPath?: string } | null {
-  const next: { sourcePath?: string; destPath?: string } = {};
-  if (opened.sourcePath) {
-    const sourcePath = toPersistedDataRelayFolderPath(opened.sourcePath);
-    if (sourcePath && !dataRelayFolderPathsEqual(rule.sourcePath, sourcePath)) {
-      next.sourcePath = sourcePath;
-    }
-  }
-  if (opened.destPath) {
-    const destPath = toPersistedDataRelayFolderPath(opened.destPath);
-    if (destPath && !dataRelayFolderPathsEqual(rule.destPath, destPath)) {
-      next.destPath = destPath;
-    }
-  }
-  return Object.keys(next).length > 0 ? next : null;
-}
-
 export function joinDataRelayPath(base: string, name: string): string {
   const fileName = name.trim();
   if (!fileName) return base;

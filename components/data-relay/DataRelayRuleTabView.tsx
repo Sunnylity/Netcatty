@@ -3,7 +3,6 @@ import { useI18n } from "../../application/i18n/I18nProvider";
 import { useIsTabActive } from "../../application/state/activeTabStore";
 import { useDataRelayRuntime } from "../../application/state/dataRelayRuntimeStore";
 import type { DataRelayViewTab } from "../../application/state/dataRelayViewTabStore";
-import { buildDataRelayBrowsePathUpdate } from "../../domain/dataRelayPaths";
 import type { DataRelayRule, Host, Identity, KnownHost, SSHKey, TerminalSettings } from "../../domain/models";
 import { toast } from "../ui/toast";
 import { CompareView } from "./CompareView";
@@ -50,23 +49,6 @@ export const DataRelayRuleTabView: React.FC<DataRelayRuleTabViewProps> = ({
     for (const host of hosts) map.set(host.id, host);
     return map;
   }, [hosts]);
-
-  const persistBrowsePaths = useCallback((
-    paths: { sourcePath?: string; destPath?: string },
-    options?: { preserveRuntime?: boolean },
-  ) => {
-    if (!relay || !rule) return false;
-    const update = buildDataRelayBrowsePathUpdate(rule, paths);
-    if (!update) return true;
-    const result = relay.updateRule(rule.id, update, {
-      preserveRuntime: options?.preserveRuntime === true,
-    });
-    if (!result.ok && result.error) {
-      toast.error(result.error);
-      return false;
-    }
-    return result.ok;
-  }, [relay, rule]);
 
   const persistScanSettings = useCallback((
     updates: Partial<DataRelayRule> & { scanCheckpoint?: DataRelayRule["scanCheckpoint"] | null },
@@ -117,7 +99,7 @@ export const DataRelayRuleTabView: React.FC<DataRelayRuleTabViewProps> = ({
         }}
         onScanSettingsChange={persistScanSettings}
         onOpenTerminalAtPath={onOpenTerminalAtPath}
-        onPersistBrowsePaths={persistBrowsePaths}
+        visible={isVisible}
       />
       {editing && (
         <RuleFormPanel

@@ -337,8 +337,10 @@ export function useDataRelayCompareSession({
     try {
       await refreshBoth();
       if (gen !== compareGenRef.current) return null;
-      const leftPath = leftRef.current.path;
-      const rightPath = rightRef.current.path;
+      // The compare button is locked to the rule's configured roots, so the
+      // sync scope never drifts with the panes' browsing position.
+      const leftPath = resolveDataRelayViewerStart(rule.sourcePath, leftRef.current.homeDir || "/").listPath;
+      const rightPath = resolveDataRelayViewerStart(rule.destPath, rightRef.current.homeDir || "/").listPath;
       appendLog(`Comparing recursively ${leftPath} <-> ${rightPath}`);
       const result = await compareDataRelayTreesPaired(
         leftPath,
@@ -386,7 +388,7 @@ export function useDataRelayCompareSession({
     } finally {
       if (gen === compareGenRef.current) setComparing(false);
     }
-  }, [appendLog, listTreePath, refreshBoth]);
+  }, [appendLog, listTreePath, refreshBoth, rule.destPath, rule.sourcePath]);
 
   const cancelCompare = useCallback(() => {
     compareGenRef.current += 1;
@@ -409,13 +411,19 @@ export function useDataRelayCompareSession({
     paths: ReadonlySet<string> | undefined,
     progress: { done: number; total: number },
   ): Promise<string[]> => {
-    const source = direction === "left-to-right" ? leftRef.current : rightRef.current;
-    const target = direction === "left-to-right" ? rightRef.current : leftRef.current;
     const sourceSftpId = direction === "left-to-right" ? leftSftpRef.current : rightSftpRef.current;
     const targetSftpId = direction === "left-to-right" ? rightSftpRef.current : leftSftpRef.current;
     const sourceHostId = direction === "left-to-right" ? rule.sourceHostId : rule.destHostId;
     const targetHostId = direction === "left-to-right" ? rule.destHostId : rule.sourceHostId;
-    if (!sourceSftpId || !targetSftpId || !source.ready || !target.ready) return [];
+    const leftReady = leftRef.current.ready;
+    const rightReady = rightRef.current.ready;
+    if (!sourceSftpId || !targetSftpId || !leftReady || !rightReady) return [];
+    // Sync scope is locked to the rule's configured roots — never to wherever
+    // the panes happen to be browsed.
+    const leftRoot = resolveDataRelayViewerStart(rule.sourcePath, leftRef.current.homeDir || "/").listPath;
+    const rightRoot = resolveDataRelayViewerStart(rule.destPath, rightRef.current.homeDir || "/").listPath;
+    const sourceBase = direction === "left-to-right" ? leftRoot : rightRoot;
+    const targetBase = direction === "left-to-right" ? rightRoot : leftRoot;
 
     const items = listDataRelayCompareCopyItems(
       currentRows,
@@ -425,7 +433,7 @@ export function useDataRelayCompareSession({
     const copied: string[] = [];
     for (const item of items) {
       if (item.type === "directory") {
-        await mkdirSftp(targetSftpId, joinTransferTargetPath(target.path, item.relativePath));
+        await mkdirSftp(targetSftpId, joinTransferTargetPath(targetBase, item.relativePath));
         copied.push(item.relativePath);
         progress.done += 1;
         setCopyProgress({ ...progress });
@@ -433,10 +441,10 @@ export function useDataRelayCompareSession({
       }
       const parentRel = parentDataRelayRelativePath(item.relativePath);
       if (parentRel) {
-        await mkdirSftp(targetSftpId, joinTransferTargetPath(target.path, parentRel));
+        await mkdirSftp(targetSftpId, joinTransferTargetPath(targetBase, parentRel));
       }
-      const sourcePath = joinTransferTargetPath(source.path, item.relativePath);
-      const targetPath = joinTransferTargetPath(target.path, item.relativePath);
+      const sourcePath = joinTransferTargetPath(sourceBase, item.relativePath);
+      const targetPath = joinTransferTargetPath(targetBase, item.relativePath);
       const result = await startStreamTransfer({
         transferId: `relay-compare-${Date.now()}-${item.relativePath}`,
         sourcePath,
@@ -462,7 +470,7 @@ export function useDataRelayCompareSession({
       }
     }
     return copied;
-  }, [appendLog, mkdirSftp, rule.destHostId, rule.sourceHostId, startStreamTransfer]);
+  }, [appendLog, mkdirSftp, rule.destHostId, rule.destPath, rule.sourceHostId, rule.sourcePath, startStreamTransfer]);
 
   const copySelection = useCallback(async (
     direction: DataRelayCompareSyncDirection,

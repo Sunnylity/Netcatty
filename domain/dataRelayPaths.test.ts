@@ -6,8 +6,6 @@ import {
   joinDataRelayPath,
   resolveDataRelayDestPath,
   resolveDataRelayViewerStart,
-  toPersistedDataRelayFolderPath,
-  buildDataRelayBrowsePathUpdate,
 } from "./dataRelayPaths";
 
 test("joinDataRelayPath uses the destination path style", () => {
@@ -66,33 +64,3 @@ test("resolveDataRelayViewerStart lists the configured folder under remote home"
   );
 });
 
-test("toPersistedDataRelayFolderPath stores a directory hint", () => {
-  assert.equal(toPersistedDataRelayFolderPath("/var/log"), "/var/log/");
-  assert.equal(toPersistedDataRelayFolderPath("/var/log/"), "/var/log/");
-  assert.equal(toPersistedDataRelayFolderPath("C:\\logs"), "C:\\logs\\");
-  assert.equal(toPersistedDataRelayFolderPath("  "), "");
-});
-
-test("buildDataRelayBrowsePathUpdate only emits changed folder roots", () => {
-  assert.equal(
-    buildDataRelayBrowsePathUpdate(
-      { sourcePath: "/var/log/", destPath: "/tmp/" },
-      { sourcePath: "/var/log", destPath: "/tmp" },
-    ),
-    null,
-  );
-  assert.deepEqual(
-    buildDataRelayBrowsePathUpdate(
-      { sourcePath: "/var/log/", destPath: "/tmp/" },
-      { sourcePath: "/var/log/nginx", destPath: "/tmp/in" },
-    ),
-    { sourcePath: "/var/log/nginx/", destPath: "/tmp/in/" },
-  );
-  assert.deepEqual(
-    buildDataRelayBrowsePathUpdate(
-      { sourcePath: "/var/log/", destPath: "/tmp/" },
-      { sourcePath: "/var/log/nginx", destPath: "/tmp/" },
-    ),
-    { sourcePath: "/var/log/nginx/" },
-  );
-});

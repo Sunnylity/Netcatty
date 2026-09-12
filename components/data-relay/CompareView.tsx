@@ -10,7 +10,6 @@ import {
   GripHorizontal,
   Play,
   RefreshCw,
-  Save,
   Square,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -33,7 +32,7 @@ import {
   joinPath,
 } from "../../application/state/sftp/utils";
 import type { DataRelayCompareFile, DataRelayCompareKind } from "../../domain/dataRelayCompare";
-import { buildDataRelayBrowsePathUpdate } from "../../domain/dataRelayPaths";
+import { resolveDataRelayViewerStart } from "../../domain/dataRelayPaths";
 import type { DataRelayRule, Host, Identity, KnownHost, SSHKey, TerminalSettings } from "../../domain/models";
 import { cn } from "../../lib/utils";
 import { SftpBreadcrumb } from "../sftp/SftpBreadcrumb";
@@ -74,10 +73,8 @@ export interface CompareViewProps {
   onStop: () => void;
   onScanSettingsChange: (updates: Partial<DataRelayRule> & { scanCheckpoint?: DataRelayRule["scanCheckpoint"] | null }) => void;
   onOpenTerminalAtPath?: (host: Host, path: string) => void;
-  onPersistBrowsePaths?: (
-    paths: { sourcePath?: string; destPath?: string },
-    options?: { preserveRuntime?: boolean },
-  ) => boolean | void;
+  /** Tab visibility: panes re-anchor to the rule paths every time it turns true. */
+  visible?: boolean;
 }
 
 const COMPARE_LOG_HEIGHT_MIN = 80;
@@ -306,7 +303,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
   onStop,
   onScanSettingsChange,
   onOpenTerminalAtPath,
-  onPersistBrowsePaths,
+  visible = true,
 }) => {
   const { t } = useI18n();
   const {
@@ -402,19 +399,6 @@ export const CompareView: React.FC<CompareViewProps> = ({
     document.body.style.userSelect = "none";
   }, [logHeight]);
 
-  const persistBrowsePaths = useCallback((options?: { preserveRuntime?: boolean }) => {
-    if (!onPersistBrowsePaths) return true;
-    if (!left.ready && !right.ready) return true;
-    return onPersistBrowsePaths({
-      sourcePath: left.ready ? left.path : undefined,
-      destPath: right.ready ? right.path : undefined,
-    }, options) !== false;
-  }, [left.path, left.ready, onPersistBrowsePaths, right.path, right.ready]);
-  const persistBrowsePathsRef = useRef(persistBrowsePaths);
-  persistBrowsePathsRef.current = persistBrowsePaths;
-  const runningRef = useRef(running);
-  runningRef.current = running;
-
   // Folder scans copy in background SFTP sessions; without a re-list the
   // panes keep showing pre-transfer listings, which reads as "nothing was
   // transferred". Each completed pass bumps rule.lastUsedAt via the active
@@ -433,30 +417,27 @@ export const CompareView: React.FC<CompareViewProps> = ({
     void refreshBoth();
   }, [rule.lastUsedAt, running, comparing, copying, refreshBoth]);
 
-  const browsePathUpdate = left.ready || right.ready
-    ? buildDataRelayBrowsePathUpdate(rule, {
-      sourcePath: left.ready ? left.path : undefined,
-      destPath: right.ready ? right.path : undefined,
-    })
-    : null;
-  const pathsDirty = Boolean(browsePathUpdate);
-
-  useEffect(() => {
-    return () => {
-      if (runningRef.current) return;
-      persistBrowsePathsRef.current({ preserveRuntime: true });
-    };
-  }, []);
-
-  const handleSaveSyncPaths = useCallback(() => {
-    if (!persistBrowsePaths({ preserveRuntime: false })) return;
-    toast.success(t("dataRelay.compare.pathsSaved"));
-  }, [persistBrowsePaths, t]);
-
   const handleStart = useCallback(() => {
-    if (!persistBrowsePaths({ preserveRuntime: false })) return;
     onStart();
-  }, [onStart, persistBrowsePaths]);
+  }, [onStart]);
+
+  // Panes are viewers only — the rule's configured paths are the sync scope
+  // (editable solely through the edit form). Re-anchor both panes to those
+  // roots every time the tab becomes visible so opening the view always
+  // expands the synced folder and shows its contents. The initial mount is
+  // already anchored by the session's connect, so it is skipped here.
+  const anchoredOpenRef = useRef(false);
+  useEffect(() => {
+    if (!visible) {
+      anchoredOpenRef.current = false;
+      return;
+    }
+    if (anchoredOpenRef.current) return;
+    anchoredOpenRef.current = true;
+    if (!left.ready && !right.ready) return;
+    void navigate("left", resolveDataRelayViewerStart(rule.sourcePath, left.homeDir || "/").listPath);
+    void navigate("right", resolveDataRelayViewerStart(rule.destPath, right.homeDir || "/").listPath);
+  }, [visible, rule.sourcePath, rule.destPath, left.ready, left.homeDir, right.ready, right.homeDir, navigate]);
 
   const copyPathToClipboard = useCallback(async (path: string) => {
     try {
@@ -587,17 +568,6 @@ export const CompareView: React.FC<CompareViewProps> = ({
           <Pencil size={14} />
         </Button>
         <ScanSettingsPopover rule={rule} onChange={onScanSettingsChange} />
-        <Button
-          type="button"
-          variant={pathsDirty ? "outline" : "ghost"}
-          size="icon"
-          className="h-8 w-8"
-          disabled={!pathsDirty || running || comparing || copying || (!left.ready && !right.ready)}
-          onClick={handleSaveSyncPaths}
-          title={t("dataRelay.compare.savePaths")}
-        >
-          <Save size={14} />
-        </Button>
         {running ? (
           <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={onStop} title={t("action.stop")}>
             <Square size={13} className="fill-current" />
@@ -610,6 +580,8 @@ export const CompareView: React.FC<CompareViewProps> = ({
       </div>
 
       <div className="flex min-h-0 flex-1 gap-2 p-2">
+        {/* Diff highlights only apply when a pane sits on the compared root;
+            browsing elsewhere must not mislabel unrelated rows. */}
         <ComparePane
           side="left"
           title={t("dataRelay.form.sourceHost")}
@@ -618,7 +590,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           busy={comparing || copying || deleting}
           selectedName={selectedName}
           kindByName={kindByName}
-          compared={compared}
+          compared={compared && left.path === resolveDataRelayViewerStart(rule.sourcePath, left.homeDir || "/").listPath}
           onSelect={setSelectedName}
           onOpen={(file) => openEntry("left", file)}
           onNavigate={(path) => void navigate("left", path)}
@@ -644,7 +616,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           busy={comparing || copying || deleting}
           selectedName={selectedName}
           kindByName={kindByName}
-          compared={compared}
+          compared={compared && right.path === resolveDataRelayViewerStart(rule.destPath, right.homeDir || "/").listPath}
           onSelect={setSelectedName}
           onOpen={(file) => openEntry("right", file)}
           onNavigate={(path) => void navigate("right", path)}

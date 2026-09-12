@@ -689,8 +689,6 @@ export const zhTWCoreMessages: Messages = {
   'dataRelay.browser.home': '主目錄',
   'dataRelay.compare.openHint': '按兩下在新分頁中開啟',
   'dataRelay.compare.run': '比較',
-  'dataRelay.compare.savePaths': '儲存同步路徑',
-  'dataRelay.compare.pathsSaved': '同步路徑已更新',
   'dataRelay.compare.copyToDest': '複製到目標',
   'dataRelay.compare.copyToSource': '複製到來源',
   'dataRelay.compare.syncInfo': '同步資訊',

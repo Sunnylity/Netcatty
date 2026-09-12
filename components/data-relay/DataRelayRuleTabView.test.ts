@@ -5,6 +5,7 @@ import test from "node:test";
 const compareViewSource = readFileSync(new URL("./CompareView.tsx", import.meta.url), "utf8");
 const tabViewSource = readFileSync(new URL("./DataRelayRuleTabView.tsx", import.meta.url), "utf8");
 const dataRelayNewSource = readFileSync(new URL("../DataRelayNew.tsx", import.meta.url), "utf8");
+const compareSessionSource = readFileSync(new URL("../../application/state/useDataRelayCompareSession.ts", import.meta.url), "utf8");
 
 test("data-relay compare view has no in-page back control", () => {
   assert.doesNotMatch(compareViewSource, /onBack/);
@@ -16,8 +17,32 @@ test("opening a data-relay rule creates a work tab instead of replacing the list
   assert.doesNotMatch(dataRelayNewSource, /setCompareRuleId/);
 });
 
-test("compare view commits selector folders before start and can save them explicitly", () => {
-  assert.match(compareViewSource, /persistBrowsePaths\(\{ preserveRuntime: false \}\)/);
-  assert.match(compareViewSource, /dataRelay\.compare\.savePaths/);
-  assert.match(tabViewSource, /preserveRuntime: options\?\.preserveRuntime === true/);
+test("browsing the compare panes never rewrites the rule sync paths", () => {
+  // The selectors are viewers only: no commit-on-start, no save button, no
+  // unmount write-back. Paths change exclusively through the edit form.
+  assert.doesNotMatch(compareViewSource, /persistBrowsePaths/);
+  assert.doesNotMatch(compareViewSource, /buildDataRelayBrowsePathUpdate/);
+  assert.doesNotMatch(compareViewSource, /dataRelay\.compare\.savePaths/);
+  assert.doesNotMatch(tabViewSource, /onPersistBrowsePaths/);
+  assert.doesNotMatch(tabViewSource, /buildDataRelayBrowsePathUpdate/);
+});
+
+test("compare and sync are locked to the rule's configured roots", () => {
+  assert.match(
+    compareSessionSource,
+    /const leftPath = resolveDataRelayViewerStart\(rule\.sourcePath/,
+  );
+  assert.match(
+    compareSessionSource,
+    /const rightPath = resolveDataRelayViewerStart\(rule\.destPath/,
+  );
+  assert.doesNotMatch(compareSessionSource, /leftRef\.current\.path;/);
+  assert.doesNotMatch(compareSessionSource, /rightRef\.current\.path;/);
+});
+
+test("re-opening a rule tab re-anchors the panes to the configured paths", () => {
+  assert.match(tabViewSource, /visible=\{isVisible\}/);
+  assert.match(compareViewSource, /anchoredOpenRef/);
+  assert.match(compareViewSource, /navigate\("left", resolveDataRelayViewerStart\(rule\.sourcePath/);
+  assert.match(compareViewSource, /navigate\("right", resolveDataRelayViewerStart\(rule\.destPath/);
 });
