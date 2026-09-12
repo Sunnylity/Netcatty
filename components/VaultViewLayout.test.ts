@@ -16,6 +16,12 @@ test("vault notes stay mounted while switching sections", () => {
   assert.doesNotMatch(vaultViewLayoutSource, /currentSection === "notes" && \(\s*<NotesManager/);
 });
 
+test("vault data relay stays mounted while switching sections", () => {
+  assert.match(vaultViewLayoutSource, /data-section="vault-data-relay-retained"/);
+  assert.match(vaultViewLayoutSource, /currentSection !== "relay" && "hidden"/);
+  assert.doesNotMatch(vaultViewLayoutSource, /currentSection === "relay" && \(\s*<LazyLoadBoundary name="Data relay"/);
+});
+
 test("vault header collapsed actions cannot retain hidden focus", () => {
   assert.match(vaultViewLayoutSource, /newHostActionsRef\.current\?\.contains\(activeElement\)/);
   assert.match(vaultViewLayoutSource, /sessionActionsRef\.current\?\.contains\(activeElement\)/);

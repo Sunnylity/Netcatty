@@ -120,7 +120,7 @@ export const useDataRelayState = ({
   }, []);
 
   const patchRuleRuntime = useCallback(
-    (ruleId: string, patch: Partial<Pick<DataRelayRule, "status" | "error" | "bytesTransferred">>) => {
+    (ruleId: string, patch: Partial<Pick<DataRelayRule, "status" | "error" | "bytesTransferred" | "lastUsedAt">>) => {
       setRules((current) =>
         current.map((rule) =>
           rule.id === ruleId
@@ -139,12 +139,17 @@ export const useDataRelayState = ({
   );
 
   const persistScanCheckpoint = useCallback((ruleId: string, checkpoint: DataRelayScanCheckpoint) => {
-    const current = rulesRef.current;
-    if (!current.some((rule) => rule.id === ruleId)) return;
-    commitRules(
-      current.map((rule) => (rule.id === ruleId ? { ...rule, scanCheckpoint: checkpoint } : rule)),
-    );
-  }, [commitRules]);
+    setRules((current) => {
+      if (!current.some((rule) => rule.id === ruleId)) return current;
+      const next = current.map((rule) => (
+        rule.id === ruleId
+          ? { ...rule, scanCheckpoint: checkpoint, lastUsedAt: Date.now() }
+          : rule
+      ));
+      localStorageAdapter.write(STORAGE_KEY_DATA_RELAY, toPersistedDataRelayRules(next));
+      return next;
+    });
+  }, []);
 
   const {
     startScan,
@@ -158,7 +163,11 @@ export const useDataRelayState = ({
     identities,
     knownHosts,
     terminalSettings,
-    onStatus: (ruleId, status, error) => patchRuleRuntime(ruleId, { status, error }),
+    onStatus: (ruleId, status, error) => patchRuleRuntime(ruleId, {
+      status,
+      error,
+      ...(status === "active" || status === "error" ? { lastUsedAt: Date.now() } : {}),
+    }),
     onBytes: (ruleId, bytesTransferred) => patchRuleRuntime(ruleId, { bytesTransferred }),
     onCheckpoint: persistScanCheckpoint,
   });

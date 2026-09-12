@@ -51,7 +51,7 @@ export const RuleCard: React.FC<RuleCardProps> = ({
       title={t('dataRelay.compare.openHint')}
       className={cn(
         'group w-full cursor-pointer rounded-xl border border-border/60 bg-card p-4 text-left transition-colors hover:border-border hover:bg-foreground/5',
-        rule.status === 'error' && 'border-destructive/40',
+        (rule.status === 'error' || Boolean(rule.error)) && 'border-destructive/40',
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -90,7 +90,15 @@ export const RuleCard: React.FC<RuleCardProps> = ({
             </div>
           )}
 
-          {rule.status === 'error' && rule.error && (
+          {running && rule.lastUsedAt ? (
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              {t('dataRelay.scan.lastPass', {
+                time: new Date(rule.lastUsedAt).toLocaleTimeString(),
+              })}
+            </div>
+          ) : null}
+
+          {rule.error && (
             <div className="mt-1.5 line-clamp-2 text-[11px] text-destructive">{rule.error}</div>
           )}
         </div>

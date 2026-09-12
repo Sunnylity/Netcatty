@@ -532,6 +532,9 @@ export const CompareView: React.FC<CompareViewProps> = ({
             <span className="mx-1 opacity-60">-&gt;</span>
             {hostLabel(destHost)} {right.ready ? right.path : rule.destPath}
           </div>
+          {rule.error ? (
+            <div className="truncate text-[11px] text-destructive">{rule.error}</div>
+          ) : null}
         </div>
         <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium", getRelayStatusTone(rule.status))}>
           {t(getRelayStatusLabelKey(rule.status))}

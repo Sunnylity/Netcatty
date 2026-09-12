@@ -162,6 +162,14 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
     if (!result.ok && result.error) toast.error(result.error);
   }, [compareRuleId, rules, updateRule]);
 
+  const persistScanSettings = useCallback((
+    ruleId: string,
+    updates: Partial<DataRelayRule> & { scanCheckpoint?: DataRelayRule["scanCheckpoint"] | null },
+  ) => {
+    const result = updateRule(ruleId, updates as Record<string, unknown>, { preserveRuntime: true });
+    if (!result.ok && result.error) toast.error(result.error);
+  }, [updateRule]);
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {compareRule ? (
@@ -179,10 +187,7 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
           onEdit={() => openEditPanel(compareRule)}
           onStart={() => void handleStart(compareRule.id)}
           onStop={() => void handleStop(compareRule.id)}
-          onScanSettingsChange={(updates) => {
-            const result = updateRule(compareRule.id, updates as Record<string, unknown>);
-            if (!result.ok && result.error) toast.error(result.error);
-          }}
+          onScanSettingsChange={(updates) => persistScanSettings(compareRule.id, updates)}
           onOpenTerminalAtPath={onOpenTerminalAtPath}
           onPersistBrowsePaths={persistCompareBrowsePaths}
         />
@@ -274,10 +279,7 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
                 onStop={() => void handleStop(rule.id)}
                 onEdit={() => openEditPanel(rule)}
                 onOpen={() => setCompareRuleId(rule.id)}
-                onScanSettingsChange={(updates) => {
-                  const result = updateRule(rule.id, updates as Record<string, unknown>);
-                  if (!result.ok && result.error) toast.error(result.error);
-                }}
+                onScanSettingsChange={(updates) => persistScanSettings(rule.id, updates)}
               />
             ))}
           </div>

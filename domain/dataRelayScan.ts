@@ -69,6 +69,13 @@ export function dataRelayScanIntervalFromParts(
   return normalizeDataRelayScanIntervalMs(amount * (unit === "minutes" ? 60_000 : 1_000));
 }
 
+/** Remaining delay so scans start every `intervalMs`, not interval after each pass. */
+export function remainingDataRelayScanDelayMs(intervalMs: number, elapsedMs: number): number {
+  const interval = normalizeDataRelayScanIntervalMs(intervalMs);
+  const elapsed = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0;
+  return Math.max(0, interval - elapsed);
+}
+
 const sortCopyItems = (items: DataRelayCompareCopyItem[]): DataRelayCompareCopyItem[] =>
   [...items].sort((a, b) => {
     const aDepth = a.relativePath.split("/").length;

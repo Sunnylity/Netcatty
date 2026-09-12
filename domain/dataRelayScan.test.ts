@@ -10,6 +10,7 @@ import {
   mergeDataRelayScanCheckpoint,
   normalizeDataRelayScanIntervalMs,
   normalizeDataRelayScanMode,
+  remainingDataRelayScanDelayMs,
   shouldCompareDataRelayScanAgainstDest,
 } from "./dataRelayScan";
 
@@ -60,6 +61,13 @@ test("dataRelayScanIntervalParts round-trips minutes and seconds", () => {
   assert.deepEqual(dataRelayScanIntervalParts(15_000), { value: 15, unit: "seconds" });
   assert.equal(dataRelayScanIntervalFromParts(2, "minutes"), 120_000);
   assert.equal(dataRelayScanIntervalFromParts(1, "seconds"), 5_000);
+});
+
+test("remainingDataRelayScanDelayMs keeps the interval as a start cadence", () => {
+  assert.equal(remainingDataRelayScanDelayMs(30_000, 0), 30_000);
+  assert.equal(remainingDataRelayScanDelayMs(30_000, 8_000), 22_000);
+  assert.equal(remainingDataRelayScanDelayMs(30_000, 30_000), 0);
+  assert.equal(remainingDataRelayScanDelayMs(30_000, 45_000), 0);
 });
 
 test("isDataRelayFolderScanRule requires a source folder", () => {

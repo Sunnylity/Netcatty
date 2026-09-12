@@ -23,6 +23,7 @@ import {
   mergeDataRelayScanCheckpoint,
   normalizeDataRelayScanIntervalMs,
   normalizeDataRelayScanMode,
+  remainingDataRelayScanDelayMs,
   shouldCompareDataRelayScanAgainstDest,
 } from "../../domain/dataRelayScan";
 import { isWindowsPath, isWindowsRoot, joinPath, joinTransferTargetPath } from "./sftp/utils";
@@ -265,8 +266,9 @@ export function useDataRelayFolderScan({
           targetHostId: rule.destHostId,
           totalBytes: item.file.size,
           sourceLastModified: item.file.lastModified,
+          skipAdmission: true,
         });
-        if (result?.error) {
+        if (result?.error || result?.cancelled) {
           failedPaths.add(item.relativePath);
           continue;
         }
@@ -291,6 +293,7 @@ export function useDataRelayFolderScan({
       pruneMissing,
       seedAll,
     }));
+    return { copied: copiedPaths.size, failed: failedPaths.size };
   }, [getSftpHomeDir, listDirectory, mkdirSftp, startStreamTransfer]);
 
   const startScan = useCallback(async (ruleId: string): Promise<{ success: boolean; error?: string }> => {
@@ -353,9 +356,17 @@ export function useDataRelayFolderScan({
       while (!session.cancelled) {
         const current = getRuleRef.current(ruleId);
         if (!current) break;
+        const startedAt = Date.now();
         try {
-          await runPass(current, session);
-          if (!session.cancelled) onStatusRef.current(ruleId, "active");
+          const result = await runPass(current, session);
+          if (session.cancelled) break;
+          onStatusRef.current(
+            ruleId,
+            "active",
+            result && result.failed > 0
+              ? `Failed to copy ${result.failed} file(s).`
+              : undefined,
+          );
         } catch (err) {
           if (session.cancelled) break;
           onStatusRef.current(
@@ -366,7 +377,7 @@ export function useDataRelayFolderScan({
         }
         if (session.cancelled) break;
         const interval = normalizeDataRelayScanIntervalMs(getRuleRef.current(ruleId)?.scanIntervalMs);
-        await sleep(session, interval);
+        await sleep(session, remainingDataRelayScanDelayMs(interval, Date.now() - startedAt));
       }
     })();
 

@@ -49,7 +49,11 @@ export const ScanSettingsPopover: React.FC<ScanSettingsPopoverProps> = ({
   return (
     <Popover
       onOpenChange={(open) => {
-        if (open) setValueText(String(dataRelayScanIntervalParts(rule.scanIntervalMs).value));
+        if (open) {
+          setValueText(String(dataRelayScanIntervalParts(rule.scanIntervalMs).value));
+          return;
+        }
+        commitInterval(valueText, parts.unit);
       }}
     >
       <PopoverTrigger asChild>

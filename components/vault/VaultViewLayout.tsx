@@ -1406,7 +1406,14 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
                 </Suspense>
               </LazyLoadBoundary>
             )}
-            {currentSection === "relay" && (
+            {/* Keep Data Relay mounted so folder scans survive leaving the section. */}
+            <div
+              className={cn(
+                "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+                currentSection !== "relay" && "hidden",
+              )}
+              data-section="vault-data-relay-retained"
+            >
               <LazyLoadBoundary name="Data relay" resetKey="data-relay">
                 <Suspense fallback={<VaultSectionLoading />}>
                   <DataRelay
@@ -1419,7 +1426,7 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
                   />
                 </Suspense>
               </LazyLoadBoundary>
-            )}
+            </div>
             {/* Always render KnownHostsManager but hide with CSS to prevent unmounting */}
             <div
               style={{
