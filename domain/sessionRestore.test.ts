@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildSessionRestorePayload,
+  formatInteractiveCdPtyInput,
   isRestoredDisconnectedSession,
   quoteRestoreCwdForShell,
   resolveRestoredActiveTabId,
@@ -776,12 +777,13 @@ test("resolveInteractiveTerminalCdIntent quotes path-only cd without session tra
   assert.equal(resolveInteractiveTerminalCdIntent("C:\\Users\\alice"), null);
 });
 
-test("resolveInteractiveTerminalCdIntent drops the MSYS drive-letter leading slash for cd", () => {
-  // Git Bash reports /C:/Users/... via OSC 7 (cygpath -m form); MSYS bash cd
-  // only accepts C:/... there. The stored cwd keeps the /C:/ form for SFTP.
+test("resolveInteractiveTerminalCdIntent converts OSC 7 cygpath -m paths to POSIX cygdrive", () => {
+  // Git Bash reports /C:/Users/... via OSC 7 (cygpath -m). MSYS bash rejects
+  // that shape; dropping the slash (C:/Users/...) still trips drive parsing.
+  // Native Git Bash cd wants /c/Users/... . Stored cwd keeps /C:/ for SFTP.
   assert.deepEqual(resolveInteractiveTerminalCdIntent("/C:/Users/521523/czh"), {
     cwd: "/C:/Users/521523/czh",
-    command: "cd -- 'C:/Users/521523/czh'",
+    command: "cd -- '/c/Users/521523/czh'",
   });
   // Plain MSYS root paths (no drive colon) pass through untouched.
   assert.deepEqual(resolveInteractiveTerminalCdIntent("/c/Users/521523/czh"), {
@@ -790,8 +792,19 @@ test("resolveInteractiveTerminalCdIntent drops the MSYS drive-letter leading sla
   });
   assert.deepEqual(resolveInteractiveTerminalCdIntent("/C:/srv dir/app"), {
     cwd: "/C:/srv dir/app",
-    command: "cd -- 'C:/srv dir/app'",
+    command: "cd -- '/c/srv dir/app'",
   });
+  assert.deepEqual(resolveInteractiveTerminalCdIntent("/D:/"), {
+    cwd: "/D:/",
+    command: "cd -- '/d'",
+  });
+});
+
+test("formatInteractiveCdPtyInput prefixes a disposable space before Enter", () => {
+  assert.equal(
+    formatInteractiveCdPtyInput("cd -- '/c/Users/521523/Contacts'"),
+    " cd -- '/c/Users/521523/Contacts'\r",
+  );
 });
 
 test("resolveInteractiveTerminalCdIntent rejects control bytes that readline would interpret", () => {
@@ -816,6 +829,22 @@ test("resolveRestoreCwdIntent captures a one-shot restore command", () => {
   }), {
     cwd: "/srv/app dir",
     command: "cd -- '/srv/app dir'",
+  });
+});
+
+test("resolveRestoreCwdIntent converts OSC 7 Git Bash paths to POSIX cygdrive", () => {
+  assert.deepEqual(resolveRestoreCwdIntent({
+    enabled: true,
+    session: {
+      ...session("s1"),
+      status: "disconnected",
+      restoreState: "restored-disconnected",
+      lastCwd: "/C:/Users/521523/Contacts",
+    },
+    isNetworkDevice: false,
+  }), {
+    cwd: "/C:/Users/521523/Contacts",
+    command: "cd -- '/c/Users/521523/Contacts'",
   });
 });
 

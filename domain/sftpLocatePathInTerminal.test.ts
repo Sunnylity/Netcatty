@@ -99,7 +99,20 @@ test("resolveLocateSftpPathInTerminalAction builds a quoted cd payload", () => {
     }),
     {
       sessionId: "sess-1",
-      data: "cd -- '/srv/app dir'\r",
+      data: " cd -- '/srv/app dir'\r",
+    },
+  );
+});
+
+test("resolveLocateSftpPathInTerminalAction converts OSC 7 Git Bash paths to POSIX cygdrive", () => {
+  assert.deepEqual(
+    resolveLocateSftpPathInTerminalAction({
+      ...base,
+      path: "/C:/Users/521523/Contacts",
+    }),
+    {
+      sessionId: "sess-1",
+      data: " cd -- '/c/Users/521523/Contacts'\r",
     },
   );
 });

@@ -126,6 +126,7 @@ export function patchGroupConfig(
     }
   }
   if (Object.hasOwn(defaults, 'startupCommand')) next.startupCommand = String(defaults.startupCommand ?? '');
+  if (Object.hasOwn(defaults, 'remoteShellCommand')) next.remoteShellCommand = String(defaults.remoteShellCommand ?? '');
   if (Object.hasOwn(defaults, 'moshServerPath')) next.moshServerPath = String(defaults.moshServerPath ?? '');
   if (Object.hasOwn(defaults, 'identityId')) {
     const identityId = String(defaults.identityId ?? '');

@@ -208,10 +208,15 @@ export interface Host {
    * When set, the session channel is opened with `exec` + PTY instead of
    * `shell`, so the configured program *replaces* the login shell rather than
    * nesting inside it — exiting it closes the tab, and there is no leftover
-   * parent process. Useful on Windows OpenSSH hosts to run e.g. Git Bash even
-   * when `HKLM\SOFTWARE\OpenSSH\DefaultShell` points at cmd/PowerShell.
+   * parent process.
    *
-   * Empty/unset keeps the previous behavior (`conn.shell()` only).
+   * Sentinels:
+   * - `git-bash`: probe the remote Windows host for Git Bash and run it
+   * - `default`: keep the server DefaultShell (opt out of Windows auto Git Bash)
+   * - empty on Windows OpenSSH: auto-prefer Git Bash when installed, else DefaultShell
+   *
+   * Useful on Windows OpenSSH hosts to run Git Bash even when
+   * `HKLM\SOFTWARE\OpenSSH\DefaultShell` points at cmd/PowerShell.
    */
   remoteShellCommand?: string;
   /** Script id (kind=script) to run automatically after connect. */
@@ -439,7 +444,7 @@ export interface GroupConfig {
   /**
    * Per-group override for the interactive session channel: when set, the
    * session opens with `exec` + PTY so this program replaces the server's
-   * `DefaultShell` (e.g. Git Bash on a Windows OpenSSH host).
+   * `DefaultShell`. Use `git-bash` to probe Git Bash on Windows OpenSSH.
    */
   remoteShellCommand?: string;
   loginScriptId?: string;

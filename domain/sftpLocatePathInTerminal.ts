@@ -1,4 +1,4 @@
-import { resolveInteractiveTerminalCdIntent } from "./sessionRestore";
+import { formatInteractiveCdPtyInput, resolveInteractiveTerminalCdIntent } from "./sessionRestore";
 
 export type LocateSftpPathInTerminalContext = {
   path?: string | null;
@@ -75,5 +75,5 @@ export function resolveLocateSftpPathInTerminalAction(
   if (!canLocateSftpPathInTerminal(options) || !options.sessionId) return null;
   const intent = resolveInteractiveTerminalCdIntent(options.path);
   if (!intent) return null;
-  return { sessionId: options.sessionId, data: `${intent.command}\r` };
+  return { sessionId: options.sessionId, data: formatInteractiveCdPtyInput(intent.command) };
 }

@@ -714,6 +714,11 @@
         "optional": true,
         "description": "paste or lineDelay."
       },
+      "remoteShellCommand": {
+        "type": "string",
+        "optional": true,
+        "description": "Program that replaces the SSH server DefaultShell (exec + PTY). Use git-bash to probe Git Bash on Windows OpenSSH, default to keep cmd/PowerShell, or a full quoted path such as \"C:\\\\Program Files\\\\Git\\\\bin\\\\bash.exe\" --login -i. Empty string clears it."
+      },
       "environmentVariables": {
         "type": "string",
         "optional": true,
@@ -1112,7 +1117,7 @@
       "defaults": {
         "type": "string",
         "optional": true,
-        "description": "JSON object of group defaults: username, identityId, proxyProfileId, jumpHostIds, startupCommand, environmentVariables, moshEnabled, moshServerPath, etEnabled, etPort."
+        "description": "JSON object of group defaults: username, identityId, proxyProfileId, jumpHostIds, startupCommand, remoteShellCommand, environmentVariables, moshEnabled, moshServerPath, etEnabled, etPort."
       }
     },
     "policy": {

@@ -1018,11 +1018,13 @@ export const ruVaultMessages: Messages = {
   'hostDetails.startupCommand.runMode.lineDelay': 'Отправлять построчно',
   'hostDetails.startupCommand.runMode.paste': 'Отправить сразу',
   'hostDetails.remoteShellCommand': 'Команда удалённой оболочки',
-  'hostDetails.remoteShellCommand.placeholder': 'напр. C:\\PROGRA~1\\Git\\bin\\bash.exe -l',
+  'hostDetails.remoteShellCommand.placeholder': 'git-bash или "C:\\Program Files\\Git\\bin\\bash.exe" --login -i',
   'hostDetails.remoteShellCommand.help':
     'Запускает эту программу вместо оболочки, которую сервер SSH запускает по умолчанию. При выходе из неё вкладка закрывается.',
   'hostDetails.remoteShellCommand.emptyHint':
-    'Оставьте пустым, чтобы использовать значение сервера (DefaultShell в OpenSSH). На хостах Windows по умолчанию это cmd.exe.',
+    'На Windows OpenSSH пустое значение использует Git Bash, если он установлен. Нажмите Git Bash, чтобы требовать его, или «По умолчанию сервера», чтобы оставить cmd/PowerShell.',
+  'hostDetails.remoteShellCommand.preset.gitBash': 'Git Bash',
+  'hostDetails.remoteShellCommand.preset.serverDefault': 'По умолчанию сервера',
   'hostDetails.otherProtocols': 'Другие протоколы',
   'hostDetails.telnetOn': 'Telnet на',
   'hostDetails.port': 'порт',

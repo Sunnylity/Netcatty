@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   getParentPath,
   getFileName,
+  isSafeNewFolderName,
   getSftpBreadcrumbSegments,
   getSftpFilterAfterPathChange,
   getSftpFilterAfterPathChangeError,
@@ -146,6 +147,21 @@ test("path bar strips the MSYS leading slash of Git Bash cwds on Windows panes",
   assert.equal(
     normalizeSftpPaneNavigationPath("/C:/srv/app", "/home/user", null),
     "/C:/srv/app",
+  );
+});
+
+test("pane navigation translates Git Bash cygdrive cwd to Windows OpenSSH SFTP", () => {
+  assert.equal(
+    normalizeSftpPaneNavigationPath("/c/Users/521523/Contacts", "/C:/Users/521523", null),
+    "/C:/Users/521523/Contacts",
+  );
+  assert.equal(
+    normalizeSftpPaneNavigationPath("/c/Users/521523/czh", "C:\\Users\\521523", null),
+    "C:\\Users\\521523\\czh",
+  );
+  assert.equal(
+    normalizeSftpPaneNavigationPath("/c/Users/521523/Contacts", "/home/user", null),
+    "/c/Users/521523/Contacts",
   );
 });
 
@@ -349,6 +365,17 @@ test("SFTP filter restores when changed-directory navigation fails", () => {
 
 test("SFTP filter preserves in-flight edits when same-directory refresh fails", () => {
   assert.equal(getSftpFilterAfterPathChangeError(false, "log", "typed-while-loading"), "typed-while-loading");
+});
+
+test("isSafeNewFolderName rejects empty, traversal, and separator names", () => {
+  assert.equal(isSafeNewFolderName("logs"), true);
+  assert.equal(isSafeNewFolderName("  logs  "), true);
+  assert.equal(isSafeNewFolderName(""), false);
+  assert.equal(isSafeNewFolderName("   "), false);
+  assert.equal(isSafeNewFolderName("."), false);
+  assert.equal(isSafeNewFolderName(".."), false);
+  assert.equal(isSafeNewFolderName("a/b"), false);
+  assert.equal(isSafeNewFolderName("a\\b"), false);
 });
 
 test("getSftpPathRoot resolves the filesystem root for breadcrumb navigation", () => {

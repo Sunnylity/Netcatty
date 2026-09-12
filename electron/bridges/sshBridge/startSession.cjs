@@ -19,6 +19,10 @@ const {
   openBoundedSshShellCallback,
   openBoundedSshExecShellCallback,
 } = require("../boundedSshChannelOpen.cjs");
+const {
+  classifyRemoteShellKindFromCommand,
+  resolveInteractiveRemoteShellCommand,
+} = require("./remoteGitBash.cjs");
 const { listInteractiveShellPids: listInteractiveShellPidsShared } = require("../sshInteractiveShells.cjs");
 const {
   shouldConfirmReusedShellLiveness,
@@ -181,7 +185,9 @@ function resolveRemoteShellCommand(options) {
  * a remote shell command like `skipShellPidDiscovery`.
  */
 function shouldSkipShellPidDiscovery(options) {
-  return Boolean(options?.skipShellPidDiscovery) || resolveRemoteShellCommand(options) !== "";
+  return Boolean(options?.skipShellPidDiscovery)
+    || resolveRemoteShellCommand(options) !== ""
+    || resolveRemoteShellCommand({ remoteShellCommand: options?._resolvedRemoteShellCommand }) !== "";
 }
 
 /**
@@ -191,26 +197,38 @@ function shouldSkipShellPidDiscovery(options) {
  * Override: an `exec` request carrying a PTY, running the host's configured
  * remote shell command. Both share the same rate-limit retry machinery and the
  * same `(err, stream)` callback contract.
+ *
+ * Windows OpenSSH with an empty override auto-probes Git Bash (matching local
+ * Windows). `git-bash` forces that probe; `default` keeps DefaultShell.
  */
 function openInteractiveChannel(
   sshClient,
-  { windowOptions, shellOptions, remoteShellCommand },
+  { windowOptions, shellOptions, remoteShellCommand, sessionOptions },
   callback,
   options = {},
 ) {
-  const command = typeof remoteShellCommand === "string" ? remoteShellCommand.trim() : "";
-  if (command) {
-    openBoundedSshExecShellCallback(
-      sshClient,
-      command,
-      windowOptions,
-      { env: shellOptions?.env },
-      callback,
-      options,
-    );
-    return;
-  }
-  openBoundedSshShellCallback(sshClient, windowOptions, shellOptions, callback, options);
+  void resolveInteractiveRemoteShellCommand({
+    rawCommand: remoteShellCommand,
+    remoteSshVersion: sshClient && sshClient._remoteVer,
+    conn: sshClient,
+    probeGitBash: options.probeGitBash,
+  }).then((command) => {
+    if (sessionOptions && typeof sessionOptions === "object") {
+      sessionOptions._resolvedRemoteShellCommand = command;
+    }
+    if (command) {
+      openBoundedSshExecShellCallback(
+        sshClient,
+        command,
+        windowOptions,
+        { env: shellOptions?.env },
+        callback,
+        options,
+      );
+      return;
+    }
+    openBoundedSshShellCallback(sshClient, windowOptions, shellOptions, callback, options);
+  }, callback);
 }
 
 async function applyAgentForwarding(
@@ -402,6 +420,15 @@ function createStartSessionApi(ctx) {
         cols: options.cols || 80,
         rows: options.rows || 24,
       };
+      // Soft AI-exec hint from the program that actually owns this PTY.
+      // Git Bash on Windows OpenSSH must not fall through to the DefaultShell
+      // registry probe (cmd/powershell) or wrappers are typed into bash.
+      const resolvedRemoteShell = options._resolvedRemoteShellCommand || options.remoteShellCommand;
+      const remoteShellKind = classifyRemoteShellKindFromCommand(resolvedRemoteShell);
+      if (remoteShellKind) {
+        session._loginShellKind = remoteShellKind;
+        session._shellKindProbeSettled = true;
+      }
       const { claimSessionSlot } = require("../sessionBootEpoch.cjs");
       const claim = claimSessionSlot(sessions, sessionId, session, options.bootEpoch);
       if (!claim.ok) {
@@ -890,6 +917,7 @@ function createStartSessionApi(ctx) {
               },
               shellOptions,
               remoteShellCommand: options.remoteShellCommand,
+              sessionOptions: options,
             },
             (err, stream) => {
               cleanupConnectionGuard();
@@ -2326,6 +2354,7 @@ function createStartSessionApi(ctx) {
                 },
                 shellOptions,
                 remoteShellCommand: options.remoteShellCommand,
+                sessionOptions: options,
               },
               (err, stream) => {
                 if (err) {

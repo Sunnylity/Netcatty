@@ -101,3 +101,42 @@ test("both interactive call shapes share one callback contract", async () => {
     shellClient.calls[0].windowOptions,
   );
 });
+
+test("git-bash sentinel opens exec + PTY with the probed path", async () => {
+  const client = createClient();
+  const sessionOptions = { remoteShellCommand: "git-bash" };
+  const stream = await new Promise((resolve, reject) => {
+    openInteractiveChannel(
+      client,
+      {
+        windowOptions: WINDOW_OPTIONS,
+        shellOptions: SHELL_OPTIONS,
+        remoteShellCommand: "git-bash",
+        sessionOptions,
+      },
+      (error, nextStream) => (error ? reject(error) : resolve(nextStream)),
+      {
+        probeGitBash: async () => "C:\\Program Files\\Git\\bin\\bash.exe",
+      },
+    );
+  });
+
+  assert.equal(stream.kind, "exec-stream");
+  assert.equal(client.calls.length, 1);
+  assert.equal(client.calls[0].kind, "exec");
+  assert.equal(client.calls[0].command, '"C:\\Program Files\\Git\\bin\\bash.exe" --login -i');
+  assert.equal(
+    sessionOptions._resolvedRemoteShellCommand,
+    '"C:\\Program Files\\Git\\bin\\bash.exe" --login -i',
+  );
+  assert.equal(shouldSkipShellPidDiscovery(sessionOptions), true);
+});
+
+test("Windows OpenSSH auto Git Bash still skips POSIX shell-PID discovery", () => {
+  assert.equal(
+    shouldSkipShellPidDiscovery({
+      _resolvedRemoteShellCommand: '"C:\\Program Files\\Git\\bin\\bash.exe" --login -i',
+    }),
+    true,
+  );
+});

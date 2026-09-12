@@ -28,9 +28,13 @@ test("shouldFollowTerminalCwdNavigate returns true when follow is on and paths d
   assert.equal(shouldFollowTerminalCwdNavigate(base), true);
 });
 
-test("shouldFollowTerminalCwdNavigate returns false when paths already match", () => {
+test("shouldFollowTerminalCwdNavigate returns false when Git Bash and OpenSSH paths match", () => {
   assert.equal(
-    shouldFollowTerminalCwdNavigate({ ...base, currentPath: "/home/user/project" }),
+    shouldFollowTerminalCwdNavigate({
+      ...base,
+      terminalCwd: "/c/Users/521523/Contacts",
+      currentPath: "/C:/Users/521523/Contacts",
+    }),
     false,
   );
 });

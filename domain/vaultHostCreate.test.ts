@@ -573,6 +573,7 @@ test('applyVaultHostUpdate applies and clears advanced connection settings', () 
     proxyProfileId: proxyProfile.id,
     startupCommand: 'tmux attach || tmux',
     startupCommandRunMode: 'lineDelay',
+    remoteShellCommand: 'git-bash',
     environmentVariables: [{ name: 'APP_ENV', value: 'production' }],
     moshEnabled: false,
     moshServerPath: '/usr/local/bin/mosh-server',
@@ -598,6 +599,7 @@ test('applyVaultHostUpdate applies and clears advanced connection settings', () 
   assert.equal(result.updatedHost.proxyProfileId, proxyProfile.id);
   assert.equal(result.updatedHost.startupCommand, 'tmux attach || tmux');
   assert.equal(result.updatedHost.startupCommandRunMode, 'lineDelay');
+  assert.equal(result.updatedHost.remoteShellCommand, 'git-bash');
   assert.deepEqual(result.updatedHost.environmentVariables, [{ name: 'APP_ENV', value: 'production' }]);
   assert.equal(result.updatedHost.moshEnabled, false);
   assert.equal(result.updatedHost.moshServerPath, '/usr/local/bin/mosh-server');
@@ -613,6 +615,7 @@ test('applyVaultHostUpdate applies and clears advanced connection settings', () 
     proxyProfileId: '',
     startupCommand: '',
     startupCommandRunMode: '',
+    remoteShellCommand: '',
     environmentVariables: {},
     moshEnabled: false,
     moshServerPath: '',
@@ -624,6 +627,7 @@ test('applyVaultHostUpdate applies and clears advanced connection settings', () 
   assert.equal(cleared.updatedHost.proxyProfileId, '');
   assert.equal(cleared.updatedHost.startupCommand, '');
   assert.equal(cleared.updatedHost.startupCommandRunMode, undefined);
+  assert.equal(cleared.updatedHost.remoteShellCommand, '');
   assert.deepEqual(cleared.updatedHost.environmentVariables, []);
   assert.equal(cleared.updatedHost.moshEnabled, false);
   assert.equal(cleared.updatedHost.moshServerPath, undefined);
@@ -648,6 +652,7 @@ test('applyVaultHostUpdate rejects malformed advanced connection settings', () =
     { patch: { proxyProfileId: 'missing' }, error: /Proxy profile .* was not found/i },
     { patch: { startupCommand: 42 }, error: /startupCommand must be a string/i },
     { patch: { startupCommandRunMode: 'fast' }, error: /paste or lineDelay/i },
+    { patch: { remoteShellCommand: 42 }, error: /remoteShellCommand must be a string/i },
     { patch: { environmentVariables: '{' }, error: /valid JSON/i },
     { patch: { environmentVariables: [{ value: 'missing-name' }] }, error: /require name and value/i },
     { patch: { moshEnabled: 'maybe' }, error: /moshEnabled must be true or false/i },

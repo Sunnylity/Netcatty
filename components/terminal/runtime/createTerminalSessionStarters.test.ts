@@ -3691,7 +3691,7 @@ test("local session restores cwd before startup command after attaching", async 
 
   assert.equal(restoreCwdIntentRef.current, null);
   assert.deepEqual(sessionWrites, [
-    { id: "local-session", data: "cd -- '/srv/app dir'\r", automated: true },
+    { id: "local-session", data: " cd -- '/srv/app dir'\r", automated: true },
     { id: "local-session", data: "pwd\r", automated: true },
   ]);
   assert.deepEqual(executedCommands, ["pwd"]);
@@ -3752,11 +3752,61 @@ test("ssh session restores cwd before startup command after attaching", async ()
   assert.equal(restoreCwdIntentRef.current, null);
   assert.deepEqual(restoredCwds, ["/srv/app dir"]);
   assert.deepEqual(sessionWrites, [
-    { id: "ssh-session", data: "cd -- '/srv/app dir'\r", automated: true },
+    { id: "ssh-session", data: " cd -- '/srv/app dir'\r", automated: true },
     { id: "ssh-session", data: "pwd\r", automated: true },
   ]);
   assert.deepEqual(executedCommands, ["pwd"]);
   assert.deepEqual(progressLogs, ["Restoring working directory: /srv/app dir"]);
+});
+
+test("ssh session delays restore cwd with startup command delay", async () => {
+  const sessionWrites: Array<{ id: string; data: string; automated?: boolean }> = [];
+  const progressLogs: string[] = [];
+  const restoreCwdIntentRef = {
+    current: { cwd: "/c/Users/me", command: "cd -- '/c/Users/me'" },
+  };
+  const terminalBackend = {
+    backendAvailable: () => true,
+    telnetAvailable: () => true,
+    moshAvailable: () => true,
+    localAvailable: () => true,
+    serialAvailable: () => true,
+    execAvailable: () => true,
+    startSSHSession: async () => "ssh-session",
+    startTelnetSession: async () => "telnet-session",
+    startMoshSession: async () => "mosh-session",
+    startLocalSession: async () => "local-session",
+    startSerialSession: async () => "serial-session",
+    execCommand: async () => ({}),
+    onSessionData: () => noop,
+    onSessionExit: () => noop,
+    onChainProgress: () => noop,
+    writeToSession: (id: string, data: string, options?: { automated?: boolean }) => {
+      sessionWrites.push({ id, data, automated: options?.automated });
+    },
+    resizeSession: noop,
+  };
+  const ctx = createStarterContext({
+    terminalSettings: { startupCommandDelayMs: 20 },
+    terminalBackend,
+    promptLineBreakStateRef: undefined,
+    restoreCwdIntentRef,
+    setProgressLogs: (updater: (prev: string[]) => string[]) => {
+      progressLogs.splice(0, progressLogs.length, ...updater(progressLogs));
+    },
+  });
+
+  await createTerminalSessionStarters(ctx as never).startSSH(createTermStub() as never);
+
+  assert.equal(restoreCwdIntentRef.current, null);
+  assert.deepEqual(sessionWrites, []);
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.deepEqual(sessionWrites, [
+    { id: "ssh-session", data: " cd -- '/c/Users/me'\r", automated: true },
+  ]);
+  assert.deepEqual(progressLogs, ["Restoring working directory: /c/Users/me"]);
 });
 
 test("local session keeps timestamp anchors for preserved scrollback when reusing a terminal", async () => {

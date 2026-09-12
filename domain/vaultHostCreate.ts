@@ -50,6 +50,7 @@ export interface VaultHostUpdatePatch extends VaultHostDraft {
   proxyProfileId?: unknown;
   startupCommand?: unknown;
   startupCommandRunMode?: unknown;
+  remoteShellCommand?: unknown;
   environmentVariables?: unknown;
   moshEnabled?: unknown;
   moshServerPath?: unknown;
@@ -359,6 +360,7 @@ export function applyVaultHostUpdate(
   const proxyProfileId = firstProvided(source, ['proxyProfileId']);
   const startupCommand = firstProvided(source, ['startupCommand']);
   const startupCommandRunMode = firstProvided(source, ['startupCommandRunMode']);
+  const remoteShellCommand = firstProvided(source, ['remoteShellCommand']);
   const environmentVariables = firstProvided(source, ['environmentVariables']);
   const moshEnabled = firstProvided(source, ['moshEnabled']);
   const moshServerPath = firstProvided(source, ['moshServerPath']);
@@ -366,7 +368,7 @@ export function applyVaultHostUpdate(
   const etPort = firstProvided(source, ['etPort']);
   const serialConfig = firstProvided(source, ['serialConfig']);
   const provided = [label, hostname, port, username, password, savePassword, keyPath, group, tags, notes, protocol, os,
-    identityId, jumpHostIds, proxyProfileId, startupCommand, startupCommandRunMode, environmentVariables,
+    identityId, jumpHostIds, proxyProfileId, startupCommand, startupCommandRunMode, remoteShellCommand, environmentVariables,
     moshEnabled, moshServerPath, etEnabled, etPort, serialConfig]
     .some((entry) => entry.provided);
   if (!provided) return { ok: false, error: 'At least one host field is required.' };
@@ -507,6 +509,10 @@ export function applyVaultHostUpdate(
     const mode = String(startupCommandRunMode.value ?? '');
     if (mode !== 'paste' && mode !== 'lineDelay' && mode !== '') return { ok: false, error: 'startupCommandRunMode must be paste or lineDelay.' };
     updated.startupCommandRunMode = mode === 'lineDelay' ? 'lineDelay' : undefined;
+  }
+  if (remoteShellCommand.provided) {
+    if (typeof remoteShellCommand.value !== 'string') return { ok: false, error: 'remoteShellCommand must be a string.' };
+    updated.remoteShellCommand = remoteShellCommand.value;
   }
   if (environmentVariables.provided) {
     let raw: unknown = environmentVariables.value;

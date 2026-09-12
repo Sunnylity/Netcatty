@@ -985,11 +985,13 @@ export const esVaultMessages: Messages = {
   'hostDetails.startupCommand.runMode.lineDelay': 'Enviar línea por línea',
   'hostDetails.startupCommand.runMode.paste': 'Enviar todo de una vez',
   'hostDetails.remoteShellCommand': 'Comando de shell remoto',
-  'hostDetails.remoteShellCommand.placeholder': 'p. ej., C:\\PROGRA~1\\Git\\bin\\bash.exe -l',
+  'hostDetails.remoteShellCommand.placeholder': 'git-bash o "C:\\Program Files\\Git\\bin\\bash.exe" --login -i',
   'hostDetails.remoteShellCommand.help':
     'Ejecuta este programa en lugar del shell que el servidor SSH iniciaría por defecto. Al salir de él se cierra la pestaña.',
   'hostDetails.remoteShellCommand.emptyHint':
-    'Déjalo vacío para usar el valor del servidor (DefaultShell de OpenSSH). En hosts Windows suele ser cmd.exe si no se configura.',
+    'En Windows OpenSSH, un valor vacío usa Git Bash si está instalado. Pulsa Git Bash para exigirlo, o Predeterminado del servidor para conservar cmd/PowerShell.',
+  'hostDetails.remoteShellCommand.preset.gitBash': 'Git Bash',
+  'hostDetails.remoteShellCommand.preset.serverDefault': 'Predeterminado del servidor',
   'hostDetails.otherProtocols': 'Otros protocolos',
   'hostDetails.telnetOn': 'Telnet activado',
   'hostDetails.port': 'puerto',

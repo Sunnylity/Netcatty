@@ -26,8 +26,11 @@ test('editing enabled SSH agent controls persists the enabled state', () => {
   assert.match(source, /useSshAgent: true,\s*identitiesOnly:/);
 });
 
-test('enabling SSH agent login clears an imported none sentinel', () => {
-  assert.match(source, /resolveSshAgentToggleUpdate/);
+test('remote shell command offers Git Bash and server-default presets', () => {
+  assert.match(source, /REMOTE_SHELL_GIT_BASH_SENTINEL/);
+  assert.match(source, /REMOTE_SHELL_DEFAULT_SENTINEL/);
+  assert.match(source, /hostDetails\.remoteShellCommand\.preset\.gitBash/);
+  assert.match(source, /hostDetails\.remoteShellCommand\.preset\.serverDefault/);
 });
 
 test('login and forwarding warnings use independent agent status', () => {

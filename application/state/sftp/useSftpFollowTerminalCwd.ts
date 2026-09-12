@@ -17,6 +17,7 @@ import {
   shouldResetInitialFollowTerminalCwdSync,
   type SftpFollowTerminalCwdBlock,
 } from "../../../domain/sftpFollowTerminalCwd";
+import { windowsUserPathsReferToSameLocation } from "../../../domain/windowsShellPaths";
 import type { Host } from "../../../types";
 import type { SftpNavigateOptions, SftpNavigateResult } from "./useSftpPaneActions";
 
@@ -313,7 +314,7 @@ export function useSftpFollowTerminalCwd({
         connection?.id
         && !connection.isLocal
         && connection.status === "connected"
-        && connection.currentPath === terminalCwd
+        && windowsUserPathsReferToSameLocation(connection.currentPath, terminalCwd)
       ) {
         handledFollowRef.current = { connectionId: connection.id, terminalCwd };
       }

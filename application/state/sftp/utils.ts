@@ -1,4 +1,5 @@
 import { SftpFileEntry, TransferTask } from "../../../domain/models";
+import { translateGitBashCwdForSftpPane } from "../../../domain/windowsShellPaths";
 
 export const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return "--";
@@ -154,7 +155,7 @@ export const normalizeSftpPaneNavigationPath = (
   rawPath: string,
   ...contextPaths: Array<string | null | undefined>
 ): string => normalizeSftpNavigationPath(
-  rawPath,
+  translateGitBashCwdForSftpPane(rawPath, ...contextPaths),
   {
     ...resolveSftpWindowsPathOptions(...contextPaths),
     trimWhitespace: false,
@@ -247,6 +248,12 @@ export const isWindowsRoot = (
   if (/^[A-Za-z]:\\?$/.test(normalized)) return true;
   const uncRoot = getWindowsUncRoot(normalized, options);
   return uncRoot !== null && normalized.replace(/[\\]+$/, "") === uncRoot;
+};
+
+export const isSafeNewFolderName = (name: string): boolean => {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed === "." || trimmed === "..") return false;
+  return !/[\\/]/.test(trimmed);
 };
 
 export const joinPath = (base: string, name: string): string => {

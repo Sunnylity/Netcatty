@@ -1,5 +1,6 @@
 import type { PluginConnectionConfig, SerialConfig, TerminalSession, Workspace, WorkspaceNode } from "./models";
 import { isPluginHostProtocol, sanitizePluginConnection } from "./pluginConnection";
+import { toMsysCygdrivePath } from "./windowsShellPaths";
 
 export const SESSION_RESTORE_VERSION = 1 as const;
 
@@ -250,25 +251,24 @@ export function quoteRestoreCwdForShell(cwd: string): string {
   return `'${cwd.replace(/'/g, "'\\''")}'`;
 }
 
-/**
- * Git Bash's built-in prompt integration reports cwd through OSC 7 as a
- * file:// URL whose pathname keeps the drive-letter form (`/C:/Users/...`,
- * from cygpath -m). MSYS bash rejects that shape in `cd` but accepts the same
- * path without the leading slash (PowerShell accepts it too), so drop the
- * slash when quoting the cd argument. The stored cwd keeps the original
- * `/C:/...` form — that is exactly how Windows OpenSSH exposes SFTP paths.
- */
-function dropMsysDriveLeadingSlashForCd(cwd: string): string {
-  return /^\/[A-Za-z]:\//.test(cwd) ? cwd.slice(1) : cwd;
-}
-
 function quoteRestoreCwdArgument(cwd: string): string {
   if (cwd === "~") return "~";
   if (cwd.startsWith("~/")) {
     const suffix = cwd.slice(2);
     return suffix ? `~/${quoteRestoreCwdForShell(suffix)}` : "~";
   }
-  return quoteRestoreCwdForShell(dropMsysDriveLeadingSlashForCd(cwd));
+  return quoteRestoreCwdForShell(toMsysCygdrivePath(cwd) ?? cwd);
+}
+
+/**
+ * PTY payload for an injected `cd`. A leading space is a disposable byte:
+ * Windows OpenSSH ConPTY / Git Bash login often swallows the first input
+ * character, which otherwise turns `cd -- ...` into `d -- ...`. POSIX shells
+ * still run the command with the space; HISTCONTROL=ignorespace may also
+ * keep the restore off the user's history.
+ */
+export function formatInteractiveCdPtyInput(command: string): string {
+  return ` ${command}\r`;
 }
 
 /** True when a path contains C0/DEL bytes that interactive readline would act on. */

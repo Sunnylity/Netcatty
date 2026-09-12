@@ -1,3 +1,5 @@
+import { windowsUserPathsReferToSameLocation } from "./windowsShellPaths";
+
 /** Pure state and decision helpers for keeping an SFTP pane aligned with a terminal. */
 export type SftpFollowTerminalCwdBlock = {
   connectionId: string;
@@ -177,7 +179,7 @@ export const shouldClearBlockedFollowOnReach = (
   if (loading || !blockedFollow || !connectionId || !currentPath) return false;
   return (
     blockedFollow.connectionId === connectionId
-    && blockedFollow.terminalCwd === currentPath
+    && windowsUserPathsReferToSameLocation(blockedFollow.terminalCwd, currentPath)
   );
 };
 
@@ -253,7 +255,7 @@ export const shouldFollowTerminalCwdNavigate = ({
     handledFollow
     && connectionId
     && handledFollow.connectionId === connectionId
-    && handledFollow.terminalCwd === terminalCwd
+    && windowsUserPathsReferToSameLocation(handledFollow.terminalCwd, terminalCwd)
   ) {
     return false;
   }
@@ -261,10 +263,10 @@ export const shouldFollowTerminalCwdNavigate = ({
     blockedFollow
     && connectionId
     && blockedFollow.connectionId === connectionId
-    && blockedFollow.terminalCwd === terminalCwd
+    && windowsUserPathsReferToSameLocation(blockedFollow.terminalCwd, terminalCwd)
   ) {
     return false;
   }
-  if (!currentPath || currentPath === terminalCwd) return false;
+  if (!currentPath || windowsUserPathsReferToSameLocation(currentPath, terminalCwd)) return false;
   return true;
 };

@@ -366,11 +366,13 @@ export const zhCNVaultMessages: Messages = {
   'hostDetails.startupCommand.runMode.lineDelay': '逐行发送',
   'hostDetails.startupCommand.runMode.paste': '一次性发送',
   'hostDetails.remoteShellCommand': '远端 Shell 命令',
-  'hostDetails.remoteShellCommand.placeholder': '例如 C:\\PROGRA~1\\Git\\bin\\bash.exe -l',
+  'hostDetails.remoteShellCommand.placeholder': 'git-bash 或 "C:\\Program Files\\Git\\bin\\bash.exe" --login -i',
   'hostDetails.remoteShellCommand.help':
     '运行此程序来替代 SSH 服务端默认启动的 Shell。退出该程序即关闭标签页。',
   'hostDetails.remoteShellCommand.emptyHint':
-    '留空则使用服务端默认值（OpenSSH 的 DefaultShell）。Windows 主机未配置时通常为 cmd.exe。',
+    'Windows OpenSSH 留空时，若远端已安装 Git Bash 会自动使用。点 Git Bash 强制探测；点服务端默认则保持 cmd/PowerShell。',
+  'hostDetails.remoteShellCommand.preset.gitBash': 'Git Bash',
+  'hostDetails.remoteShellCommand.preset.serverDefault': '服务端默认',
   'hostDetails.otherProtocols': '其他协议',
   'hostDetails.telnetOn': 'Telnet on',
   'hostDetails.port': '端口',

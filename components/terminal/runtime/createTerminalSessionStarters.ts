@@ -29,7 +29,8 @@ import { teardownTerminalOutputPipeline } from "./terminalOutputPipeline";
 import { resetTerminalSyncBlockFilter } from "./terminalSyncBlockFilter";
 import { flushTerminalWriteCoalescer } from "./terminalWriteCoalescer";
 import { isConnectionTokenCurrent, registerConnectionToken, runDistroDetection } from "./terminalDistroDetection";
-import { resolveStartupCommand, scheduleStartupCommand } from "./terminalStartupCommands";
+import { formatInteractiveCdPtyInput } from "../../../domain/sessionRestore";
+import { normalizeStartupCommandDelay, resolveStartupCommand, scheduleStartupCommand } from "./terminalStartupCommands";
 import { markPromptLineBreakCommandPending } from "./promptLineBreak";
 import {
   isEncryptedCredentialPlaceholder,
@@ -192,15 +193,40 @@ export const createTerminalSessionStarters = (ctx: TerminalSessionStartersContex
     };
   };
 
-  const consumeRestoreCwdIntent = (term: XTerm, id: string): void => {
-    const intent = ctx.restoreCwdIntentRef?.current;
-    if (!intent) return;
-    ctx.restoreCwdIntentRef.current = null;
+  const sendRestoreCwdIntent = (
+    term: XTerm,
+    id: string,
+    intent: { cwd: string; command: string },
+  ): void => {
     ctx.setProgressLogs((prev) => [...prev, tr("terminal.restore.cwdLog", `Restoring working directory: ${intent.cwd}`)
       .replace("{cwd}", intent.cwd)]);
-    ctx.terminalBackend.writeToSession(id, `${intent.command}\r`, { automated: true });
+    ctx.terminalBackend.writeToSession(id, formatInteractiveCdPtyInput(intent.command), { automated: true });
     ctx.onRestoreCwdIntentConsumed?.(intent.cwd);
     markPromptLineBreakCommandPending(ctx.promptLineBreakStateRef, term, intent.command);
+  };
+
+  const scheduleRestoreCwdIntent = (term: XTerm, id: string): (() => void) | undefined => {
+    const intent = ctx.restoreCwdIntentRef?.current;
+    if (!intent) return undefined;
+    ctx.restoreCwdIntentRef.current = null;
+    const settings = ctx.terminalSettingsRef?.current ?? ctx.terminalSettings;
+    const delayMs = normalizeStartupCommandDelay(settings?.startupCommandDelayMs);
+    if (delayMs === 0) {
+      sendRestoreCwdIntent(term, id, intent);
+      return undefined;
+    }
+
+    const scheduledSessionId = id;
+    let cancelled = false;
+    const timeoutId = setTimeout(() => {
+      if (cancelled) return;
+      if (!ctx.sessionRef.current || ctx.sessionRef.current !== scheduledSessionId) return;
+      sendRestoreCwdIntent(term, scheduledSessionId, intent);
+    }, delayMs);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   };
 
   const resolveSavedSudoAutofillPassword = (): string | undefined => {
@@ -813,7 +839,7 @@ export const createTerminalSessionStarters = (ctx: TerminalSessionStartersContex
         return;
       }
 
-      consumeRestoreCwdIntent(term, id);
+      scheduleRestoreCwdIntent(term, id);
       scheduleStartupCommand(ctx, term, id);
 
       // Run OS detection only after successful connection. Mint a fresh
@@ -1910,7 +1936,7 @@ export const createTerminalSessionStarters = (ctx: TerminalSessionStartersContex
       });
 
       ctx.onSessionAttached?.(id);
-      consumeRestoreCwdIntent(term, id);
+      scheduleRestoreCwdIntent(term, id);
       scheduleStartupCommand(ctx, term, id);
     } catch (err) {
       if (ignoreStaleAttemptUi()) return;

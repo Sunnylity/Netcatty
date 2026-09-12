@@ -125,6 +125,7 @@ const TOOL_INPUT_FIELDS = Object.freeze({
     proxyProfileId: { type: "string", optional: true, description: "Reusable proxy ID from vault_proxy_profiles_list. Empty string clears it." },
     startupCommand: { type: "string", optional: true, description: "Command to run after connecting. Empty string clears it." },
     startupCommandRunMode: { type: "string", optional: true, description: "paste or lineDelay." },
+    remoteShellCommand: { type: "string", optional: true, description: "Program that replaces the SSH server DefaultShell (exec + PTY). Use git-bash to probe Git Bash on Windows OpenSSH, default to keep cmd/PowerShell, or a full quoted path such as \"C:\\\\Program Files\\\\Git\\\\bin\\\\bash.exe\" --login -i. Empty string clears it." },
     environmentVariables: { type: "string", optional: true, description: "JSON object or array of {name,value} entries. Empty object clears them." },
     moshEnabled: { type: "string", optional: true, description: "true or false." },
     moshServerPath: { type: "string", optional: true, description: "Optional mosh-server path." },
@@ -195,7 +196,7 @@ const TOOL_INPUT_FIELDS = Object.freeze({
   "vault.group.list": {},
   "vault.group.create": {
     path: { type: "string", description: "New group path, for example prod/web." },
-    defaults: { type: "string", optional: true, description: "JSON object of group defaults: username, identityId, proxyProfileId, jumpHostIds, startupCommand, environmentVariables, moshEnabled, moshServerPath, etEnabled, etPort." },
+    defaults: { type: "string", optional: true, description: "JSON object of group defaults: username, identityId, proxyProfileId, jumpHostIds, startupCommand, remoteShellCommand, environmentVariables, moshEnabled, moshServerPath, etEnabled, etPort." },
   },
   "vault.group.update": {
     path: { type: "string", description: "Existing group path." },

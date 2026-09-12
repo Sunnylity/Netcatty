@@ -20,6 +20,10 @@ import {
   DEFAULT_SSH_TCP_CONNECT_TIMEOUT_SECONDS,
   MAX_SSH_CONNECTION_TIMEOUT_SECONDS,
 } from "../domain/sshConnectionTimeouts";
+import {
+  REMOTE_SHELL_DEFAULT_SENTINEL,
+  REMOTE_SHELL_GIT_BASH_SENTINEL,
+} from "../domain/remoteShellCommand";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type HostDetailsAdvancedSectionsProps = Record<string, any>;
@@ -818,6 +822,26 @@ export const HostDetailsAdvancedSections: React.FC<HostDetailsAdvancedSectionsPr
             onChange={(e) => update("remoteShellCommand", e.target.value)}
             className="font-mono text-sm"
           />
+          <div className="flex flex-wrap gap-1.5">
+            <Button
+              type="button"
+              variant={form.remoteShellCommand === REMOTE_SHELL_GIT_BASH_SENTINEL ? "secondary" : "outline"}
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => update("remoteShellCommand", REMOTE_SHELL_GIT_BASH_SENTINEL)}
+            >
+              {t("hostDetails.remoteShellCommand.preset.gitBash")}
+            </Button>
+            <Button
+              type="button"
+              variant={form.remoteShellCommand === REMOTE_SHELL_DEFAULT_SENTINEL ? "secondary" : "outline"}
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => update("remoteShellCommand", REMOTE_SHELL_DEFAULT_SENTINEL)}
+            >
+              {t("hostDetails.remoteShellCommand.preset.serverDefault")}
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground">
             {t("hostDetails.remoteShellCommand.emptyHint")}
           </p>
