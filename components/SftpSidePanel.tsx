@@ -18,6 +18,7 @@ import React, {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type MutableRefObject,
 } from "react";
 import { SftpSidePanelDeferredMount } from "./SftpSidePanelDeferredMount";
@@ -37,6 +38,7 @@ import {
 } from "../application/state/editorTabStore";
 import { releaseEditorTabSaveCoordinator } from "../application/state/editorTabSave";
 import { useSftpBackend } from "../application/state/useSftpBackend";
+import { sftpTransferCenterStore } from "../application/state/sftpTransferCenterStore";
 import { useSftpFileAssociations } from "../application/state/useSftpFileAssociations";
 import { getParentPath, isConcreteTransferTargetPath } from "../application/state/sftp/utils";
 import { buildCacheKey } from "../application/state/sftp/sharedRemoteHostCache";
@@ -177,6 +179,25 @@ interface SftpSidePanelProps {
   onSftpFollowTerminalCwdChange?: (enabled: boolean, host?: Host | null) => void;
   onRequestTerminalFocus?: () => void;
   terminalSettings?: { keepaliveInterval: number; keepaliveCountMax: number };
+}
+
+/**
+ * Ownerless transfer-center tasks (data-relay folder scans). The snapshot is
+ * signature-cached on id:status so byte-progress ticks do not re-render the
+ * side panel — only task additions and status transitions yield a new array.
+ */
+function useOwnerlessTransferTasks(): TransferTask[] {
+  const cacheRef = useRef<{ signature: string; value: TransferTask[] } | null>(null);
+  const getSnapshot = useCallback(() => {
+    const tasks = sftpTransferCenterStore.getSnapshot().tasks.filter(
+      (task) => !task.ownerId && !task.parentTaskId,
+    );
+    const signature = tasks.map((task) => `${task.id}:${task.status}`).join("\n");
+    if (cacheRef.current?.signature === signature) return cacheRef.current.value;
+    cacheRef.current = { signature, value: tasks };
+    return tasks;
+  }, []);
+  return useSyncExternalStore(sftpTransferCenterStore.subscribe, getSnapshot, getSnapshot);
 }
 
 const SftpSidePanelInner: React.FC<SftpSidePanelProps> = ({
@@ -1724,21 +1745,32 @@ const SftpSidePanelInteractiveBody: React.FC<SftpSidePanelInteractiveBodyProps> 
     terminalBackend,
   ]);
 
+  const ownerlessTransferTasks = useOwnerlessTransferTasks();
   const MAX_VISIBLE_TRANSFERS = 5;
   const visibleTransfers = useMemo(() => {
     const connection = sftp.leftPane.connection;
     if (!connection) return [];
     // Filter transfers to those relevant to the active connection's host,
     // so workspace focus switches don't show transfers from other hosts.
-    const filtered = sftp.transfers.filter((t) => {
+    const matchesConnection = (t: TransferTask) => {
       if (t.parentTaskId) return false; // Child tasks rendered by SftpTransferQueue
       if (connection.isLocal) {
         return t.sourceConnectionId === connection.id || t.targetConnectionId === connection.id;
       }
       return t.targetHostId === connection.hostId || t.sourceConnectionId === connection.id || t.targetConnectionId === connection.id;
-    });
-    return [...filtered].reverse().slice(0, MAX_VISIBLE_TRANSFERS);
-  }, [sftp.transfers, sftp.leftPane.connection]);
+    };
+    const ownerTasks = sftp.transfers.filter(matchesConnection);
+    // Ownerless background tasks (data-relay folder scans) match by host so the
+    // panel shows them like pane-initiated transfers; dedupe against owner rows.
+    const seenIds = new Set(ownerTasks.map((t) => t.id));
+    const relayTasks = ownerlessTransferTasks.filter(
+      (t) => !seenIds.has(t.id)
+        && (matchesConnection(t) || t.sourceHostId === connection.hostId),
+    );
+    return [...ownerTasks, ...relayTasks]
+      .sort((a, b) => b.startTime - a.startTime)
+      .slice(0, MAX_VISIBLE_TRANSFERS);
+  }, [sftp.transfers, sftp.leftPane.connection, ownerlessTransferTasks]);
 
   const handleRevealTransferTarget = useCallback(
     async (task: TransferTask) => {

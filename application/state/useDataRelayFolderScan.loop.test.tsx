@@ -4,6 +4,7 @@ import React from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 
 import type { Host, RemoteFile } from "../../domain/models.ts";
+import { sftpTransferCenterStore } from "./sftpTransferCenterStore.ts";
 import { useDataRelayState, type UseDataRelayStateResult } from "./useDataRelayState.ts";
 
 const hosts: Host[] = [
@@ -140,6 +141,16 @@ test("folder scan passes copy new and changed files on every interval", async ()
     assert.equal(destFs.get("/root/dst/b.txt")?.size, 20, "first pass copies b.txt");
     assert.equal(transfers.length, 2);
     assert.ok((state!.rules[0].bytesTransferred ?? 0) > 0, "bytes are reported");
+
+    const relayTasks = () => sftpTransferCenterStore.getSnapshot().tasks.filter(
+      (task) => task.id.startsWith("relay-scan-"),
+    );
+    assert.equal(relayTasks().length, 2, "each copy is registered in the transfer center");
+    for (const task of relayTasks()) {
+      assert.equal(task.status, "completed", `${task.id} settles as completed`);
+      assert.equal(task.direction, "remote-to-remote");
+      assert.equal(task.targetHostId, "dst-host");
+    }
 
     // Change the source between passes: one brand-new file, one modified file.
     sourceFs.set("/root/src/c.txt", { size: 30, mtime: Date.now() });

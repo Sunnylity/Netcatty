@@ -15,7 +15,7 @@ import {
   parentDataRelayRelativePath,
   type DataRelayCompareFile,
 } from "../../domain/dataRelayCompare";
-import { resolveDataRelayViewerStart, usesWindowsDataRelayPath } from "../../domain/dataRelayPaths";
+import { resolveDataRelayViewerStart, usesWindowsDataRelayPath, getDataRelayFileName } from "../../domain/dataRelayPaths";
 import {
   isDataRelayFolderScanRule,
   listDataRelayScanCopyItemsFromCheckpoint,
@@ -27,6 +27,7 @@ import {
   shouldCompareDataRelayScanAgainstDest,
 } from "../../domain/dataRelayScan";
 import { isWindowsPath, isWindowsRoot, joinPath, joinTransferTargetPath } from "./sftp/utils";
+import { sftpTransferCenterStore } from "./sftpTransferCenterStore";
 import { buildSftpHostCredentials } from "./sftp/useSftpHostCredentials";
 import { useSftpBackend } from "./useSftpBackend";
 
@@ -254,10 +255,38 @@ export function useDataRelayFolderScan({
             // Parent directory may already exist on the destination.
           }
         }
+        const sourceAbsPath = joinTransferTargetPath(sourcePath, item.relativePath);
+        const targetAbsPath = joinTransferTargetPath(destPath, item.relativePath);
+        const transferId = `relay-scan-${rule.id}-${Date.now()}-${item.relativePath}`;
+        // Register the copy as a transfer-center task before it starts so it
+        // shows in the transfer panel while running: main-process lifecycle and
+        // progress events are keyed on transferId and keep the row updated.
+        // The post-await patches are a fallback for event loss.
+        sftpTransferCenterStore.upsertTasks([{
+          id: transferId,
+          fileName: getDataRelayFileName(item.relativePath),
+          sourcePath: sourceAbsPath,
+          targetPath: targetAbsPath,
+          sourceConnectionId: sourceSftpId,
+          targetConnectionId: destSftpId,
+          sourceHostId: rule.sourceHostId,
+          targetHostId: rule.destHostId,
+          sourceHostLabel: sourceHost.label,
+          targetHostLabel: destHost.label,
+          direction: "remote-to-remote",
+          status: "queued",
+          totalBytes: item.file.size,
+          transferredBytes: 0,
+          speed: 0,
+          startTime: Date.now(),
+          isDirectory: false,
+          sourceLastModified: item.file.lastModified,
+          retryable: false,
+        }]);
         const result = await startStreamTransfer({
-          transferId: `relay-scan-${rule.id}-${Date.now()}-${item.relativePath}`,
-          sourcePath: joinTransferTargetPath(sourcePath, item.relativePath),
-          targetPath: joinTransferTargetPath(destPath, item.relativePath),
+          transferId,
+          sourcePath: sourceAbsPath,
+          targetPath: targetAbsPath,
           sourceType: "sftp",
           targetType: "sftp",
           sourceSftpId,
@@ -269,9 +298,21 @@ export function useDataRelayFolderScan({
           skipAdmission: true,
         });
         if (result?.error || result?.cancelled) {
+          sftpTransferCenterStore.patchTask(transferId, {
+            status: result?.cancelled ? "cancelled" : "failed",
+            error: result?.error || undefined,
+            endTime: Date.now(),
+            speed: 0,
+          });
           failedPaths.add(item.relativePath);
           continue;
         }
+        sftpTransferCenterStore.patchTask(transferId, {
+          status: "completed",
+          transferredBytes: item.file.size,
+          endTime: Date.now(),
+          speed: 0,
+        });
         copiedPaths.add(item.relativePath);
         bytesCopied += item.file.size;
       } catch {
