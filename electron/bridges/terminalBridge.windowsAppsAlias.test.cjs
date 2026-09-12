@@ -110,10 +110,52 @@ test("getDefaultLocalShell resolves an MSIX pwsh execution alias", (t) => {
   const { aliasPath } = makeHarness(t);
 
   withWin32Platform(() =>
-    withWhereFake(new Map([["pwsh", [aliasPath]]]), () => {
-      assert.equal(bridge.getDefaultLocalShell(), aliasPath);
-    }),
+    withWhereFake(new Map([["pwsh", [aliasPath]]]), () =>
+      // Hide machine-local Git Bash installs so the test behaves the same on
+      // dev machines and CI runners that ship Git for Windows.
+      withExistsSyncAllowlist(new Set(), () => {
+        assert.equal(bridge.getDefaultLocalShell(), aliasPath);
+      }),
+    ),
   );
+});
+
+test("getDefaultLocalShell prefers Git Bash over PowerShell on Windows", (t) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "netcatty-git-bash-default-"));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const gitBashPath = path.join(tmp, "Git", "bin", "bash.exe");
+  fs.mkdirSync(path.dirname(gitBashPath), { recursive: true });
+  fs.writeFileSync(gitBashPath, "");
+
+  const previousProgramFiles = process.env.ProgramFiles;
+  process.env.ProgramFiles = tmp;
+  t.after(() => {
+    if (previousProgramFiles === undefined) {
+      delete process.env.ProgramFiles;
+    } else {
+      process.env.ProgramFiles = previousProgramFiles;
+    }
+  });
+
+  withWin32Platform(() =>
+    // Empty where.exe answers: Git Bash must be picked without any PATH probe.
+    withWhereFake(new Map(), () =>
+      withExistsSyncAllowlist(new Set([gitBashPath]), () => {
+        assert.equal(bridge.getDefaultLocalShell(), gitBashPath);
+      }),
+    ),
+  );
+});
+
+test("getLocalShellArgs launches Windows bash as a login interactive shell", () => {
+  withWin32Platform(() => {
+    assert.deepEqual(
+      bridge.getLocalShellArgs("C:\\Program Files\\Git\\bin\\bash.exe"),
+      ["--login", "-i"],
+    );
+    assert.deepEqual(bridge.getLocalShellArgs("bash"), ["--login", "-i"]);
+    assert.deepEqual(bridge.getLocalShellArgs("pwsh.exe"), ["-NoLogo"]);
+  });
 });
 
 test("findExecutable prefers a regular executable listed after an execution alias", (t) => {

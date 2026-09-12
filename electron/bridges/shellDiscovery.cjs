@@ -458,7 +458,7 @@ function detectCygwin() {
 /**
  * Discover all available shells on a Windows system.
  * Returns an array of DiscoveredShell objects. Exactly one shell will have
- * `isDefault: true` based on priority: pwsh > powershell > cmd.
+ * `isDefault: true` based on priority: git-bash > pwsh > powershell > cmd.
  *
  * @returns {Array<{id: string, name: string, command: string, args: string[], icon: string, isDefault?: boolean}>}
  */
@@ -484,8 +484,11 @@ function discoverWindowsShells() {
   const cygwin = detectCygwin();
   if (cygwin) shells.push(cygwin);
 
-  // Assign default: pwsh > powershell > cmd
+  // Assign default: git-bash > pwsh > powershell > cmd. Git Bash keeps common
+  // Unix commands working in local terminals on Windows, which matches what
+  // getDefaultLocalShell() in terminalBridge.cjs prefers.
   const defaultShell =
+    shells.find((s) => s.id === "git-bash") ||
     shells.find((s) => s.id === "pwsh") ||
     shells.find((s) => s.id === "powershell") ||
     shells.find((s) => s.id === "cmd");
@@ -700,6 +703,7 @@ module.exports = {
   discoverShells,
   discoverWindowsShells,
   discoverUnixShells,
+  detectGitBash,
   mapUnixShellName,
   mapUnixShellIcon,
   isLoginShell,

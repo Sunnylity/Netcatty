@@ -58,7 +58,7 @@ const sessionLogStreamManager = require("./sessionLogStreamManager.cjs");
 const { detectShellKind } = require("./ai/ptyExec.cjs");
 const { stripAnsi, trackSessionIdlePrompt } = require("./ai/shellUtils.cjs");
 const { createZmodemSentry } = require("./zmodemHelper.cjs");
-const { discoverShells } = require("./shellDiscovery.cjs");
+const { discoverShells, detectGitBash } = require("./shellDiscovery.cjs");
 const { isWindowsAppExecutionAliasPath } = require("../../lib/localShell.cjs");
 const moshHandshake = require("./moshHandshake.cjs");
 const tempDirBridge = require("./tempDirBridge.cjs");
@@ -823,6 +823,16 @@ function getDefaultLocalShell() {
     return process.env.SHELL || "/bin/bash";
   }
 
+  // Prefer Git Bash as the Windows shell backend: its MSYS environment keeps
+  // common Unix commands (ls, grep, cat, ssh, ...) available so local
+  // terminals stay command-compatible with the POSIX-flavored integrations
+  // Netcatty drives. Machines without Git for Windows fall through to the
+  // PowerShell chain below.
+  const gitBash = detectGitBash();
+  if (gitBash?.command) {
+    return gitBash.command;
+  }
+
   const pwsh = findExecutable("pwsh");
   if (pwsh && pwsh.toLowerCase() !== "pwsh") {
     return pwsh;
@@ -846,6 +856,11 @@ function getLocalShellArgs(shellPath) {
   const shellName = path.basename(shellPath).toLowerCase();
   if (POWERSHELL_SHELLS.has(shellName)) {
     return ["-NoLogo"];
+  }
+  if (shellName === "bash.exe" || shellName === "bash") {
+    // Git Bash / Cygwin bash must launch as a login interactive shell so the
+    // MSYS profile sets up PATH and the home mapping before the first prompt.
+    return ["--login", "-i"];
   }
 
   return [];
@@ -2533,6 +2548,7 @@ module.exports = {
   registerHandlers,
   findExecutable,
   getDefaultLocalShell,
+  getLocalShellArgs,
   startLocalSession,
   startTelnetSession,
   startMoshSession,

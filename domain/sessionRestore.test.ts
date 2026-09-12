@@ -776,6 +776,24 @@ test("resolveInteractiveTerminalCdIntent quotes path-only cd without session tra
   assert.equal(resolveInteractiveTerminalCdIntent("C:\\Users\\alice"), null);
 });
 
+test("resolveInteractiveTerminalCdIntent drops the MSYS drive-letter leading slash for cd", () => {
+  // Git Bash reports /C:/Users/... via OSC 7 (cygpath -m form); MSYS bash cd
+  // only accepts C:/... there. The stored cwd keeps the /C:/ form for SFTP.
+  assert.deepEqual(resolveInteractiveTerminalCdIntent("/C:/Users/521523/czh"), {
+    cwd: "/C:/Users/521523/czh",
+    command: "cd -- 'C:/Users/521523/czh'",
+  });
+  // Plain MSYS root paths (no drive colon) pass through untouched.
+  assert.deepEqual(resolveInteractiveTerminalCdIntent("/c/Users/521523/czh"), {
+    cwd: "/c/Users/521523/czh",
+    command: "cd -- '/c/Users/521523/czh'",
+  });
+  assert.deepEqual(resolveInteractiveTerminalCdIntent("/C:/srv dir/app"), {
+    cwd: "/C:/srv dir/app",
+    command: "cd -- 'C:/srv dir/app'",
+  });
+});
+
 test("resolveInteractiveTerminalCdIntent rejects control bytes that readline would interpret", () => {
   // Tab / ESC / Ctrl-U / newline / DEL must not be typed into an interactive PTY.
   assert.equal(resolveInteractiveTerminalCdIntent("/srv/app\tdir"), null);

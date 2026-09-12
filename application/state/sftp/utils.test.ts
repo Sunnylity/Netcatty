@@ -123,6 +123,32 @@ test("path bar keeps POSIX double-slash paths outside Windows panes", () => {
   );
 });
 
+test("path bar strips the MSYS leading slash of Git Bash cwds on Windows panes", () => {
+  const windowsPane = { acceptForwardSlashUnc: true } as const;
+  assert.equal(
+    normalizeSftpNavigationPath("/C:/Users/521523/czh", windowsPane),
+    "C:\\Users\\521523\\czh",
+  );
+  assert.equal(
+    normalizeSftpNavigationPath("/d:/data dir", windowsPane),
+    "d:\\data dir",
+  );
+  assert.equal(normalizeSftpNavigationPath("/C:/", windowsPane), "C:\\");
+  assert.equal(
+    normalizeSftpPaneNavigationPath("/C:/Users/521523/czh", "C:\\Users\\521523", null),
+    "C:\\Users\\521523\\czh",
+  );
+  // POSIX panes without Windows context hints keep the path untouched.
+  assert.equal(
+    normalizeSftpNavigationPath("/C:/Users/521523/czh"),
+    "/C:/Users/521523/czh",
+  );
+  assert.equal(
+    normalizeSftpPaneNavigationPath("/C:/srv/app", "/home/user", null),
+    "/C:/srv/app",
+  );
+});
+
 test("getParentPath preserves POSIX double-slash prefixes", () => {
   assert.equal(getParentPath("//srv/share/logs"), "//srv/share");
   assert.equal(getParentPath("//srv/share"), "//srv");

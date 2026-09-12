@@ -83,6 +83,19 @@ test("findExecutableOnPath returns null when where.exe finds nothing", (t) => {
   whereResults.delete("pwsh");
 });
 
+// Hide machine-specific fallback paths (e.g. a Git for Windows install under
+// Program Files) so the tests behave identically regardless of what the host
+// has installed.
+function withExistsSyncAllowlist(allowed, fn) {
+  const realExistsSync = fs.existsSync;
+  fs.existsSync = (p) => allowed.has(String(p));
+  try {
+    return fn();
+  } finally {
+    fs.existsSync = realExistsSync;
+  }
+}
+
 test("discoverWindowsShells lists PowerShell 7 from an MSIX alias and marks it default", (t) => {
   const { aliasPath } = makeHarness(t);
   whereResults.set("pwsh", [aliasPath]);
@@ -92,10 +105,50 @@ test("discoverWindowsShells lists PowerShell 7 from an MSIX alias and marks it d
     whereResults.delete("powershell");
   });
 
-  const shells = shellDiscovery.discoverWindowsShells();
+  const shells = withExistsSyncAllowlist(new Set(), () => shellDiscovery.discoverWindowsShells());
   const pwsh = shells.find((s) => s.id === "pwsh");
 
   assert.ok(pwsh, "expected a discovered pwsh shell entry");
   assert.equal(pwsh.command, aliasPath);
   assert.equal(pwsh.isDefault, true);
+});
+
+test("discoverWindowsShells marks Git Bash as the Windows default when installed", (t) => {
+  const { aliasPath } = makeHarness(t);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "netcatty-git-bash-discovery-"));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  const gitBashPath = path.join(tmp, "Git", "bin", "bash.exe");
+  fs.mkdirSync(path.dirname(gitBashPath), { recursive: true });
+  fs.writeFileSync(gitBashPath, "");
+
+  const previousProgramFiles = process.env.ProgramFiles;
+  process.env.ProgramFiles = tmp;
+  t.after(() => {
+    if (previousProgramFiles === undefined) {
+      delete process.env.ProgramFiles;
+    } else {
+      process.env.ProgramFiles = previousProgramFiles;
+    }
+  });
+
+  whereResults.set("pwsh", [aliasPath]);
+  whereResults.set("powershell", null);
+  t.after(() => {
+    whereResults.delete("pwsh");
+    whereResults.delete("powershell");
+  });
+
+  const shells = withExistsSyncAllowlist(
+    new Set([gitBashPath]),
+    () => shellDiscovery.discoverWindowsShells(),
+  );
+  const gitBash = shells.find((s) => s.id === "git-bash");
+  const pwsh = shells.find((s) => s.id === "pwsh");
+
+  assert.ok(gitBash, "expected a discovered git-bash shell entry");
+  assert.equal(gitBash.command, gitBashPath);
+  assert.deepEqual(gitBash.args, ["--login", "-i"]);
+  assert.equal(gitBash.isDefault, true);
+  assert.ok(pwsh, "expected a discovered pwsh shell entry");
+  assert.notEqual(pwsh.isDefault, true);
 });

@@ -110,7 +110,16 @@ export const normalizeSftpNavigationPath = (
   options?: NormalizeSftpNavigationPathOptions,
 ): string => {
   const prepared = options?.trimWhitespace === false ? rawPath : rawPath.trim();
-  const newPath = prepared || "/";
+  let newPath = prepared || "/";
+  // Git Bash reports the cwd through OSC 7 in cygpath -m form behind a
+  // leading slash (/C:/Users/...). On Windows-style panes strip that slash so
+  // the path flows through the Windows normalization below and the local
+  // filesystem / SFTP server receive a real Windows path. POSIX panes keep
+  // /C:/... untouched — a directory literally named "C:" is a valid POSIX
+  // name and must not be rewritten there.
+  if (options?.acceptForwardSlashUnc && /^\/[A-Za-z]:[\\/]/.test(newPath)) {
+    newPath = newPath.slice(1);
+  }
   if (isWindowsPath(newPath, options)) {
     if (/^[A-Za-z]:[\\/]?$/.test(newPath)) {
       return `${newPath.charAt(0).toUpperCase()}:\\`;
