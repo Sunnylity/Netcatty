@@ -739,6 +739,7 @@ export const zhTWCoreMessages: Messages = {
   'dataRelay.context.pasteSamePath': '已在目前資料夾中',
   'dataRelay.context.pasteSourceGone': '來源主機未連線',
   'dataRelay.context.pasteFailed': '貼上失敗',
+  'dataRelay.context.deleteSuccess': '已刪除 {count} 項',
   'vault.nav.snippets': '程式碼片段',
   'vault.nav.notes': '筆記',
   'vault.nav.knownHosts': '已知主機',

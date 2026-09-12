@@ -1100,6 +1100,7 @@ Highlight the focused split pane:
   'dataRelay.context.pasteSamePath': 'Already in this folder',
   'dataRelay.context.pasteSourceGone': 'Source host is not connected',
   'dataRelay.context.pasteFailed': 'Paste failed',
+  'dataRelay.context.deleteSuccess': 'Deleted {count} item(s)',
   'vault.nav.snippets': 'Scripts',
   'vault.nav.notes': 'Notes',
   'vault.nav.knownHosts': 'Known Hosts',

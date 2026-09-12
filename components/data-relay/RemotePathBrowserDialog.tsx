@@ -36,6 +36,7 @@ import { ScrollArea } from "../ui/scroll-area";
 import { toast } from "../ui/toast";
 import {
   NewFolderDialog,
+  PathListDeleteConfirmDialog,
   PathListEntryContextMenu,
   PathListPaneContextMenu,
   type PathNameDialogKind,
@@ -82,6 +83,8 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [createFolderError, setCreateFolderError] = useState<string | null>(null);
   const [pasting, setPasting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<RemotePathBrowserEntry | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const {
     connecting,
     listing,
@@ -97,6 +100,7 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
     createFile,
     copyEntries,
     pasteEntries,
+    deleteEntries,
   } = useRemotePathBrowser({
     open,
     host,
@@ -134,6 +138,7 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
     setNameDialogKind(null);
     setNewFolderName("");
     setCreateFolderError(null);
+    setDeleteTarget(null);
     onSelect(path);
     onOpenChange(false);
   }, [confirmPath, onSelect, onOpenChange]);
@@ -143,7 +148,7 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
     void navigateTo(joinPath(currentPath, entry.name));
   }, [currentPath, navigateTo]);
 
-  const canMutate = sftpReady && !connecting && !pasting;
+  const canMutate = sftpReady && !connecting && !pasting && !deleting;
   const canOpenTerminal = Boolean(onOpenTerminalAtPath && host);
 
   const copyPathToClipboard = useCallback(async (path: string) => {
@@ -212,6 +217,22 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
     }
   }, [notifyPasteError, pasteEntries, t]);
 
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const result = await deleteEntries([deleteTarget]);
+      if (result.deleted.length > 0) {
+        toast.success(t("dataRelay.context.deleteSuccess", { count: result.deleted.length }));
+      }
+      setDeleteTarget(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("sftp.error.deleteFailed"));
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteEntries, deleteTarget, t]);
+
   const handleOpenTerminal = useCallback((entry?: RemotePathBrowserEntry) => {
     if (!host || !onOpenTerminalAtPath) return;
     onOpenTerminalAtPath(
@@ -230,6 +251,7 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
       setNameDialogKind(null);
       setNewFolderName("");
       setCreateFolderError(null);
+      setDeleteTarget(null);
     }
     onOpenChange(nextOpen);
   }, [onOpenChange]);
@@ -299,7 +321,7 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
           </div>
 
           <div className="relative min-h-[280px] flex-1 overflow-hidden rounded-md border border-border/60">
-            {(connecting || listing || pasting) && (
+            {(connecting || listing || pasting || deleting) && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70">
                 <Loader2 size={20} className="animate-spin text-muted-foreground" />
               </div>
@@ -329,6 +351,7 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
                           onPaste={() => void handlePaste()}
                           onNewFolder={() => openNameDialog("folder")}
                           onNewFile={() => openNameDialog("file")}
+                          onDelete={() => setDeleteTarget(entry)}
                           onOpenTerminal={onOpenTerminalAtPath ? () => handleOpenTerminal(entry) : undefined}
                         >
                           <button
@@ -383,6 +406,16 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
         }
       }}
       onCreate={() => void handleCreateNamedEntry()}
+    />
+    <PathListDeleteConfirmDialog
+      open={deleteTarget !== null}
+      hostLabel={host?.label || host?.hostname}
+      path={deleteTarget ? joinPath(currentPath, deleteTarget.name) : ""}
+      deleting={deleting}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) setDeleteTarget(null);
+      }}
+      onConfirm={() => void handleDeleteConfirm()}
     />
     </>
   );

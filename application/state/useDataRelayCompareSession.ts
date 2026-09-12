@@ -106,6 +106,7 @@ export function useDataRelayCompareSession({
     mkdirSftp,
     writeSftp,
     writeSftpBinary,
+    deleteSftp,
     startStreamTransfer,
   } = useSftpBackend();
   const [left, setLeft] = useState<DataRelayComparePaneState>({
@@ -671,6 +672,39 @@ export function useDataRelayCompareSession({
     }
   }, [appendLog, listPane, listSftp, mkdirSftp, rule.destHostId, rule.sourceHostId, startStreamTransfer]);
 
+  const deleteEntries = useCallback(async (side: DataRelayCompareSide, files: DataRelayCompareFile[]) => {
+    const names = files.map((file) => file.name).filter(isSafeNewFolderName);
+    if (names.length === 0) return { deleted: [] as string[], failed: [] as string[] };
+    const sftpId = side === "left" ? leftSftpRef.current : rightSftpRef.current;
+    const pane = side === "left" ? leftRef.current : rightRef.current;
+    if (!sftpId || !pane.ready) {
+      throw new Error("SFTP session not ready");
+    }
+
+    const deleted: string[] = [];
+    const failed: string[] = [];
+    for (const name of names) {
+      const fullPath = joinPath(pane.path, name);
+      try {
+        await deleteSftp(sftpId, fullPath);
+        deleted.push(name);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        failed.push(message || name);
+        appendLog(`Delete failed: ${fullPath}: ${message}`, "error");
+      }
+    }
+    await listPane(side, sftpId, pane.path);
+    setSelectedName((current) => (current && names.includes(current) ? null : current));
+    if (deleted.length > 0) {
+      appendLog(`Deleted ${deleted.length} item(s)`, "success");
+    }
+    if (failed.length > 0 && deleted.length === 0) {
+      throw new Error(failed[0] || "Delete failed");
+    }
+    return { deleted, failed };
+  }, [appendLog, deleteSftp, listPane]);
+
   return {
     left,
     right,
@@ -691,6 +725,7 @@ export function useDataRelayCompareSession({
     createFile,
     copyEntries,
     pasteEntries,
+    deleteEntries,
     openEntry,
     runCompare,
     cancelCompare,

@@ -7,11 +7,12 @@ import {
   Loader2,
   RefreshCw,
   Terminal,
+  Trash2,
 } from "lucide-react";
 import React from "react";
 import { useI18n } from "../../application/i18n/I18nProvider";
 import { useDataRelayPathClipboard } from "../../application/state/sftp/dataRelayPathClipboardStore";
-import { isSafeNewFolderName } from "../../application/state/sftp/utils";
+import { getFileName, isSafeNewFolderName } from "../../application/state/sftp/utils";
 import { Button } from "../ui/button";
 import {
   ContextMenu,
@@ -23,6 +24,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -41,6 +43,7 @@ export interface PathListContextActions {
   onNewFile: () => void;
   onOpenTerminal?: () => void;
   onRefresh?: () => void;
+  onDelete?: () => void;
 }
 
 const PathListContextMenuItems: React.FC<PathListContextActions & { variant: "row" | "empty" }> = ({
@@ -55,6 +58,7 @@ const PathListContextMenuItems: React.FC<PathListContextActions & { variant: "ro
   onNewFile,
   onOpenTerminal,
   onRefresh,
+  onDelete,
 }) => {
   const { t } = useI18n();
   const clipboard = useDataRelayPathClipboard();
@@ -90,6 +94,19 @@ const PathListContextMenuItems: React.FC<PathListContextActions & { variant: "ro
             <ContextMenuItem disabled={!canOpenTerminal} onSelect={onOpenTerminal}>
               <Terminal size={14} className="mr-2" />
               {t("dataRelay.context.openTerminal")}
+            </ContextMenuItem>
+          </>
+        ) : null}
+        {onDelete ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              className="text-destructive focus:text-destructive"
+              disabled={disabled}
+              onSelect={onDelete}
+            >
+              <Trash2 size={14} className="mr-2" />
+              {t("sftp.context.delete")}
             </ContextMenuItem>
           </>
         ) : null}
@@ -170,6 +187,82 @@ export const PathListEntryContextMenu: React.FC<PathListEntryContextMenuProps> =
 
 /** @deprecated Use PathListPaneContextMenu */
 export const PathListNewFolderMenu = PathListPaneContextMenu;
+
+export interface PathListDeleteConfirmDialogProps {
+  open: boolean;
+  hostLabel?: string;
+  path: string;
+  deleting?: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}
+
+export const PathListDeleteConfirmDialog: React.FC<PathListDeleteConfirmDialogProps> = ({
+  open,
+  hostLabel,
+  path,
+  deleting = false,
+  onOpenChange,
+  onConfirm,
+}) => {
+  const { t } = useI18n();
+  const confirmButtonRef = React.useRef<HTMLButtonElement>(null);
+  const name = getFileName(path) || path;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (deleting) return;
+        onOpenChange(nextOpen);
+      }}
+    >
+      <DialogContent
+        className="max-w-[calc(100vw-2rem)] overflow-hidden sm:max-w-sm"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          confirmButtonRef.current?.focus();
+        }}
+      >
+        <DialogHeader className="min-w-0 pr-6">
+          <DialogTitle className="truncate">
+            {t("sftp.deleteConfirm.single", { name })}
+          </DialogTitle>
+          <DialogDescription className="break-words [overflow-wrap:anywhere]">
+            {t("sftp.deleteConfirm.descSingle")}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="min-w-0 space-y-1.5 text-xs text-muted-foreground">
+          {hostLabel ? (
+            <div className="flex min-w-0 items-start gap-2">
+              <span className="shrink-0 font-medium text-foreground/80">{t("sftp.deleteConfirm.host")}:</span>
+              <span className="min-w-0 break-words [overflow-wrap:anywhere]">{hostLabel}</span>
+            </div>
+          ) : null}
+          <div className="flex min-w-0 items-start gap-2">
+            <span className="shrink-0 font-medium text-foreground/80">{t("sftp.deleteConfirm.path")}:</span>
+            <span className="min-w-0 break-all font-mono [overflow-wrap:anywhere]">{path}</span>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={deleting} onClick={() => onOpenChange(false)}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            ref={confirmButtonRef}
+            type="button"
+            variant="destructive"
+            disabled={deleting}
+            onClick={onConfirm}
+          >
+            {deleting ? <Loader2 size={14} className="mr-2 animate-spin" /> : null}
+            {t("action.delete")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 export type PathNameDialogKind = "folder" | "file";
 

@@ -1083,6 +1083,7 @@ export const ruCoreMessages: Messages = {
   'dataRelay.context.pasteSamePath': 'Уже в этой папке',
   'dataRelay.context.pasteSourceGone': 'Исходный хост не подключён',
   'dataRelay.context.pasteFailed': 'Не удалось вставить',
+  'dataRelay.context.deleteSuccess': 'Удалено элементов: {count}',
   'vault.nav.snippets': 'Сниппеты',
   'vault.nav.notes': 'Заметки',
   'vault.nav.knownHosts': 'Известные хосты',

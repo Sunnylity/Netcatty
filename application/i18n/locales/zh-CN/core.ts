@@ -736,6 +736,7 @@ export const zhCNCoreMessages: Messages = {
   'dataRelay.context.pasteSamePath': '已在当前文件夹中',
   'dataRelay.context.pasteSourceGone': '源主机未连接',
   'dataRelay.context.pasteFailed': '粘贴失败',
+  'dataRelay.context.deleteSuccess': '已删除 {count} 项',
   'vault.nav.snippets': '脚本',
   'vault.nav.notes': '笔记',
   'vault.nav.knownHosts': '已知主机',

@@ -49,6 +49,7 @@ import {
 import { CompareSyncDialog } from "./CompareSyncDialog";
 import {
   NewFolderDialog,
+  PathListDeleteConfirmDialog,
   PathListEntryContextMenu,
   PathListPaneContextMenu,
   type PathNameDialogKind,
@@ -125,6 +126,7 @@ const ComparePane: React.FC<{
   onCopyPath: (file?: DataRelayCompareFile) => void;
   onCopy: (file: DataRelayCompareFile) => void;
   onPaste: () => void;
+  onDelete: (file: DataRelayCompareFile) => void;
   onOpenTerminal?: (file?: DataRelayCompareFile) => void;
 }> = ({
   side,
@@ -146,6 +148,7 @@ const ComparePane: React.FC<{
   onCopyPath,
   onCopy,
   onPaste,
+  onDelete,
   onOpenTerminal,
 }) => {
   const { t } = useI18n();
@@ -250,6 +253,7 @@ const ComparePane: React.FC<{
                       onPaste={onPaste}
                       onNewFolder={onNewFolder}
                       onNewFile={onNewFile}
+                      onDelete={() => onDelete(file)}
                       onOpenTerminal={onOpenTerminal ? () => onOpenTerminal(file) : undefined}
                     >
                       <button
@@ -323,6 +327,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
     createFile,
     copyEntries,
     pasteEntries,
+    deleteEntries,
     openEntry,
     runCompare,
     copySelection,
@@ -346,6 +351,11 @@ export const CompareView: React.FC<CompareViewProps> = ({
   const [newFolderName, setNewFolderName] = useState("");
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [createFolderError, setCreateFolderError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    side: DataRelayCompareSide;
+    file: DataRelayCompareFile;
+  } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [logHeight, setLogHeight, persistLogHeight] = useStoredNumber(
     STORAGE_KEY_DATA_RELAY_COMPARE_LOG_HEIGHT,
     COMPARE_LOG_HEIGHT_DEFAULT,
@@ -473,6 +483,22 @@ export const CompareView: React.FC<CompareViewProps> = ({
     }
   }, [notifyPasteError, pasteEntries, t]);
 
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const result = await deleteEntries(deleteTarget.side, [deleteTarget.file]);
+      if (result.deleted.length > 0) {
+        toast.success(t("dataRelay.context.deleteSuccess", { count: result.deleted.length }));
+      }
+      setDeleteTarget(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("sftp.error.deleteFailed"));
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteEntries, deleteTarget, t]);
+
   const handleOpenTerminal = useCallback((side: DataRelayCompareSide, file?: DataRelayCompareFile) => {
     const host = side === "left" ? sourceHost : destHost;
     if (!host || !onOpenTerminalAtPath) return;
@@ -545,7 +571,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           title={t("dataRelay.form.sourceHost")}
           host={sourceHost}
           pane={left}
-          busy={comparing || copying}
+          busy={comparing || copying || deleting}
           selectedName={selectedName}
           kindByName={kindByName}
           compared={compared}
@@ -560,6 +586,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           onCopyPath={(file) => handleCopyPath("left", file)}
           onCopy={(file) => handleCopy("left", file)}
           onPaste={() => void handlePaste("left")}
+          onDelete={(file) => setDeleteTarget({ side: "left", file })}
           onOpenTerminal={onOpenTerminalAtPath ? (file) => handleOpenTerminal("left", file) : undefined}
         />
         <div className="hidden w-6 shrink-0 items-center justify-center md:flex">
@@ -570,7 +597,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           title={t("dataRelay.form.destHost")}
           host={destHost}
           pane={right}
-          busy={comparing || copying}
+          busy={comparing || copying || deleting}
           selectedName={selectedName}
           kindByName={kindByName}
           compared={compared}
@@ -585,6 +612,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           onCopyPath={(file) => handleCopyPath("right", file)}
           onCopy={(file) => handleCopy("right", file)}
           onPaste={() => void handlePaste("right")}
+          onDelete={(file) => setDeleteTarget({ side: "right", file })}
           onOpenTerminal={onOpenTerminalAtPath ? (file) => handleOpenTerminal("right", file) : undefined}
         />
       </div>
@@ -674,6 +702,22 @@ export const CompareView: React.FC<CompareViewProps> = ({
           }
         }}
         onCreate={() => void handleCreateNamedEntry()}
+      />
+
+      <PathListDeleteConfirmDialog
+        open={deleteTarget !== null}
+        hostLabel={hostLabel(deleteTarget?.side === "right" ? destHost : sourceHost)}
+        path={deleteTarget
+          ? joinPath(
+            (deleteTarget.side === "left" ? left : right).path,
+            deleteTarget.file.name,
+          )
+          : ""}
+        deleting={deleting}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        onConfirm={() => void handleDeleteConfirm()}
       />
     </div>
   );

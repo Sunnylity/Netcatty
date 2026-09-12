@@ -87,6 +87,7 @@ export function useRemotePathBrowser({
     mkdirSftp,
     writeSftp,
     writeSftpBinary,
+    deleteSftp,
     startStreamTransfer,
   } = useSftpBackend();
   const [connecting, setConnecting] = useState(false);
@@ -323,6 +324,32 @@ export function useRemotePathBrowser({
     return result;
   }, [listDirectory, mkdirSftp, startStreamTransfer, toCompareFiles]);
 
+  const deleteEntries = useCallback(async (files: RemotePathBrowserEntry[]) => {
+    const names = files.map((file) => file.name).filter(isSafeNewFolderName);
+    if (names.length === 0) return { deleted: [] as string[], failed: [] as string[] };
+    const sftpId = sftpIdRef.current;
+    if (!sftpId) {
+      throw new Error("SFTP session not ready");
+    }
+    const parentPath = currentPathRef.current;
+    const deleted: string[] = [];
+    const failed: string[] = [];
+    for (const name of names) {
+      try {
+        await deleteSftp(sftpId, joinPath(parentPath, name));
+        deleted.push(name);
+      } catch (err) {
+        failed.push(err instanceof Error ? err.message : String(err) || name);
+      }
+    }
+    await listDirectory(sftpId, parentPath);
+    setSelectedName((current) => (current && names.includes(current) ? null : current));
+    if (failed.length > 0 && deleted.length === 0) {
+      throw new Error(failed[0] || "Delete failed");
+    }
+    return { deleted, failed };
+  }, [deleteSftp, listDirectory]);
+
   return {
     connecting,
     listing,
@@ -338,5 +365,6 @@ export function useRemotePathBrowser({
     createFile,
     copyEntries,
     pasteEntries,
+    deleteEntries,
   };
 }

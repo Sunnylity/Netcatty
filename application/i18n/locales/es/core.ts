@@ -1058,6 +1058,7 @@ Resalta el panel dividido enfocado:
   'dataRelay.context.pasteSamePath': 'Ya está en esta carpeta',
   'dataRelay.context.pasteSourceGone': 'El host de origen no está conectado',
   'dataRelay.context.pasteFailed': 'Error al pegar',
+  'dataRelay.context.deleteSuccess': 'Se eliminaron {count} elemento(s)',
   'vault.nav.snippets': 'Scripts',
   'vault.nav.notes': 'Notas',
   'vault.nav.knownHosts': 'Hosts conocidos',
