@@ -161,6 +161,14 @@ smoke coverage. Packaged-resource changes must also pass `npm run pack:dir`.
 - Avoid direct network/fetch in components; add a service/adaptor first.
 - Maintain ASCII-only unless required by existing file content.
 
+## Git Commit Discipline
+
+Every completed feature or bug fix must be committed to git when the work is finished:
+
+- Commit as soon as a feature is complete or a bug is fixed; do not leave finished work sitting uncommitted.
+- The commit message must explain the change: what was implemented or completed (feature), or what was broken and how it was fixed (bug fix). Do not stop at file names or a vague "update code".
+- Keep each commit scoped to one feature or one fix; include its tests and any regenerated artifacts (e.g., generated tool specs) in the same commit.
+
 ## Reporting Issues & PRs
 
 Issues opened without the required format are **auto-closed** by the issue-format bot. Agents that file issues via `gh` or the API must still follow these rules:
