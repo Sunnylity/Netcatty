@@ -65,6 +65,51 @@ test("captureDropPayload reads webkit entries synchronously", () => {
   assert.equal(payload.roots[0].localPath, "/tmp/note.txt");
 });
 
+test("captureDropPayload recovers directory path from dataTransfer.files", () => {
+  const folder = new File([], "project");
+  Object.defineProperty(folder, "path", { value: "\\\\wsl.localhost\\Ubuntu\\home\\user\\project" });
+  const dataTransfer = {
+    items: [{
+      kind: "file",
+      getAsFile: () => null,
+      webkitGetAsEntry: () => ({
+        name: "project",
+        isFile: false,
+        isDirectory: true,
+      }),
+    }],
+    files: [folder],
+  } as unknown as DataTransfer;
+
+  const payload = captureDropPayload(dataTransfer);
+  assert.equal(payload.roots.length, 1);
+  assert.equal(payload.roots[0].name, "project");
+  assert.equal(payload.roots[0].isDirectory, true);
+  assert.equal(payload.roots[0].localPath, "\\\\wsl.localhost\\Ubuntu\\home\\user\\project");
+});
+
+test("captureDropPayload does not assign a file path to an unrelated directory", () => {
+  const file = new File(["x"], "note.txt");
+  Object.defineProperty(file, "path", { value: "C:\\Users\\me\\note.txt" });
+  const dataTransfer = {
+    items: [{
+      kind: "file",
+      getAsFile: () => null,
+      webkitGetAsEntry: () => ({
+        name: "project",
+        isFile: false,
+        isDirectory: true,
+      }),
+    }],
+    files: [file],
+  } as unknown as DataTransfer;
+
+  const payload = captureDropPayload(dataTransfer);
+  assert.equal(payload.roots.length, 1);
+  assert.equal(payload.roots[0].isDirectory, true);
+  assert.equal(payload.roots[0].localPath, undefined);
+});
+
 test("materializeDropEntries prefers listLocalTree for directory roots with paths", async () => {
   const progress: Array<{ fileCount: number; directoryCount: number }> = [];
   const tree: LocalTreeListEntry[] = [

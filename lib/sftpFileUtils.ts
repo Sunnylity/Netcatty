@@ -513,6 +513,19 @@ export function captureDropPayload(dataTransfer: DataTransfer): CapturedDropPayl
   const roots: CapturedDropRoot[] = [];
   const items = dataTransfer.items;
 
+  // Directory drag-and-drop often exposes the directory through
+  // `dataTransfer.files` while `DataTransferItem.getAsFile()` returns null.
+  // Keep a name -> native path map so directory roots can use Electron's
+  // native `listLocalTree` scan instead of the Chromium FileSystemEntry walk.
+  // The webkit walk does not reliably traverse UNC/WSL locations.
+  const fallbackLocalPathByName = new Map<string, string>();
+  for (const file of filesFallback) {
+    const filePath = getPathForFile(file);
+    if (filePath && file.name) {
+      fallbackLocalPathByName.set(file.name, filePath);
+    }
+  }
+
   const relativePathForFile = (file: File): string | undefined => {
     const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
     return relative && relative.length > 0 ? relative : undefined;
@@ -525,10 +538,13 @@ export function captureDropPayload(dataTransfer: DataTransfer): CapturedDropPayl
 
       const entry = item.webkitGetAsEntry();
       const file = typeof item.getAsFile === "function" ? item.getAsFile() : (filesFallback[i] ?? null);
-      const localPath = file ? getPathForFile(file) : undefined;
+      let localPath = file ? getPathForFile(file) : undefined;
       const relativePath = file ? relativePathForFile(file) : undefined;
 
       if (entry) {
+        if (entry.isDirectory && !localPath) {
+          localPath = fallbackLocalPathByName.get(entry.name);
+        }
         roots.push({
           name: entry.name,
           isDirectory: entry.isDirectory,
