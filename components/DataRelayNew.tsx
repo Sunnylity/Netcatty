@@ -6,6 +6,7 @@ import {
   type UseDataRelayStateOptions,
 } from '../application/state/useDataRelayState';
 import { DataRelayRule, Host, Identity, KnownHost, SSHKey } from '../domain/models';
+import { buildDataRelayBrowsePathUpdate } from '../domain/dataRelayPaths';
 import { cn } from '../lib/utils';
 import { RuleCard, RuleFormPanel, CompareView } from './data-relay';
 import { Button } from './ui/button';
@@ -25,6 +26,7 @@ export interface DataRelayNewProps {
   identities?: Identity[];
   knownHosts?: KnownHost[];
   terminalSettings?: UseDataRelayStateOptions['terminalSettings'];
+  onOpenTerminalAtPath?: (host: Host, path: string) => void;
 }
 
 const DataRelayNew: React.FC<DataRelayNewProps> = ({
@@ -33,6 +35,7 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
   identities = [],
   knownHosts = [],
   terminalSettings,
+  onOpenTerminalAtPath,
 }) => {
   const { t } = useI18n();
   const {
@@ -149,6 +152,16 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
     [stopRule],
   );
 
+  const persistCompareBrowsePaths = useCallback((paths: { sourcePath?: string; destPath?: string }) => {
+    if (!compareRuleId) return;
+    const rule = rules.find((item) => item.id === compareRuleId);
+    if (!rule) return;
+    const update = buildDataRelayBrowsePathUpdate(rule, paths);
+    if (!update) return;
+    const result = updateRule(rule.id, update, { preserveRuntime: true });
+    if (!result.ok && result.error) toast.error(result.error);
+  }, [compareRuleId, rules, updateRule]);
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {compareRule ? (
@@ -170,6 +183,8 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
             const result = updateRule(compareRule.id, updates as Record<string, unknown>);
             if (!result.ok && result.error) toast.error(result.error);
           }}
+          onOpenTerminalAtPath={onOpenTerminalAtPath}
+          onPersistBrowsePaths={persistCompareBrowsePaths}
         />
       ) : (
         <>
@@ -280,6 +295,7 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
           identities={identities}
           knownHosts={knownHosts}
           terminalSettings={terminalSettings}
+          onOpenTerminalAtPath={onOpenTerminalAtPath}
           onChange={(updates) => setDraft((current) => ({ ...current, ...updates }))}
           onSave={handleSave}
           onClose={closePanel}

@@ -153,6 +153,30 @@ test('updateDataRelayRule keeps a running relay when only scan settings change',
   assert.equal(result.value.rule.scanCheckpoint?.at, 9);
 });
 
+test('updateDataRelayRule can persist browse paths without stopping a running relay', () => {
+  const existing = makeRule({
+    status: 'active',
+    sourcePath: '/var/log/',
+    destPath: '/tmp/',
+    bytesTransferred: 40,
+    scanCheckpoint: { at: 9, files: { 'a.log': { size: 1, lastModified: 2 } } },
+  });
+  const result = updateDataRelayRule(
+    [existing],
+    hosts,
+    'rule-1',
+    { sourcePath: '/var/log/nginx/', destPath: '/tmp/in/' },
+    { preserveRuntime: true },
+  );
+  assert.equal('error' in result, false);
+  if ('error' in result) return;
+  assert.equal(result.value.rule.status, 'active');
+  assert.equal(result.value.rule.bytesTransferred, 40);
+  assert.equal(result.value.rule.sourcePath, '/var/log/nginx/');
+  assert.equal(result.value.rule.destPath, '/tmp/in/');
+  assert.equal(result.value.rule.scanCheckpoint, undefined);
+});
+
 test('hasDataRelayConnectionChanged tracks all relay-defining fields', () => {
   const base = makeRule();
   assert.equal(hasDataRelayConnectionChanged(base, makeRule({ label: 'x' })), false);

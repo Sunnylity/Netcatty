@@ -207,13 +207,14 @@ export function updateDataRelayRule(
   hosts: Host[],
   ruleId: string,
   source: Record<string, unknown>,
+  options?: { preserveRuntime?: boolean },
 ): Result<{ rules: DataRelayRule[]; rule: DataRelayRule }> {
   const existing = rules.find((rule) => rule.id === ruleId);
   if (!existing) return { ok: false, error: `Data relay rule "${ruleId}" was not found.` };
   const built = buildRule(source, hosts, existing);
   if ('error' in built) return { ok: false, error: built.error };
   const connectionChanged = hasDataRelayConnectionChanged(existing, built.value);
-  const updatedRule = connectionChanged
+  const updatedRule = connectionChanged && !options?.preserveRuntime
     ? {
       ...built.value,
       status: 'inactive' as const,
@@ -221,7 +222,15 @@ export function updateDataRelayRule(
       bytesTransferred: undefined,
       scanCheckpoint: undefined,
     }
-    : built.value;
+    : connectionChanged && options?.preserveRuntime
+      ? {
+        ...built.value,
+        status: existing.status,
+        error: existing.error,
+        bytesTransferred: existing.bytesTransferred,
+        scanCheckpoint: undefined,
+      }
+      : built.value;
   return {
     ok: true,
     value: {

@@ -606,6 +606,7 @@ function AppViewInner({ domains }: AppViewProps) {
             onConnectSerial={handleConnectSerial}
             onDeleteHost={handleDeleteHost}
             onConnect={handleConnectToHost}
+            onOpenTerminalAtPath={(host, path) => handleConnectToHost(host, false, false, { pendingInitialCwd: path })}
             onOpenHostFromNote={handleOpenHostFromVaultNote}
             groupConfigs={groupConfigs}
             onUpdateGroupConfigs={updateGroupConfigs}

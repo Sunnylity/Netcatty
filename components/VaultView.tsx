@@ -237,6 +237,7 @@ interface VaultViewProps {
   ) => void;
   onDeleteHost: (id: string) => void;
   onConnect: (host: Host) => void;
+  onOpenTerminalAtPath?: (host: Host, path: string) => void;
   onOpenHostFromNote?: (host: Host, source?: { noteId: string }) => void;
   onUpdateHosts: (hosts: Host[]) => VaultHostPersistenceResult | Promise<VaultHostPersistenceResult>;
   onReadPersistedHosts: () => Promise<Host[]>;
@@ -324,6 +325,7 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
   onConnectSerial,
   onDeleteHost,
   onConnect,
+  onOpenTerminalAtPath,
   onOpenHostFromNote,
   onUpdateHosts,
   onReadPersistedHosts,
@@ -1513,6 +1515,7 @@ const VaultViewInner: React.FC<VaultViewProps> = ({
           onOpenHostFromNote,
           onOpenLogView,
           onOpenSettings,
+          onOpenTerminalAtPath,
           onRunSnippet,
           onUpdateCustomGroups,
           onUpdateGroupConfigs,

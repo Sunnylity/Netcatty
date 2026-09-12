@@ -8,23 +8,29 @@ import {
   Home,
   Loader2,
   Pencil,
+  GripHorizontal,
   Play,
   RefreshCw,
   Square,
 } from "lucide-react";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../../application/i18n/I18nProvider";
 import {
   useDataRelayCompareSession,
   type DataRelayComparePaneState,
   type DataRelayCompareSide,
 } from "../../application/state/useDataRelayCompareSession";
+import { useStoredNumber } from "../../application/state/useStoredNumber";
+import { STORAGE_KEY_DATA_RELAY_COMPARE_LOG_HEIGHT } from "../../infrastructure/config/storageKeys";
+import { resolveOpenTerminalPath } from "../../application/state/sftp/copyRemotePathEntries";
 import {
   formatDate,
   formatFileSize,
+  getNextUntitledName,
   getParentPath,
   isWindowsPath,
   isWindowsRoot,
+  joinPath,
 } from "../../application/state/sftp/utils";
 import type { DataRelayCompareFile, DataRelayCompareKind } from "../../domain/dataRelayCompare";
 import type { DataRelayRule, Host, Identity, KnownHost, SSHKey, TerminalSettings } from "../../domain/models";
@@ -32,6 +38,8 @@ import { cn } from "../../lib/utils";
 import { SftpBreadcrumb } from "../sftp/SftpBreadcrumb";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
+import { toast } from "../ui/toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import {
   formatRelayBytes,
   getRelayStatusLabelKey,
@@ -39,7 +47,12 @@ import {
   isRelayRuleRunning,
 } from "./utils";
 import { CompareSyncDialog } from "./CompareSyncDialog";
-import { NewFolderDialog, PathListNewFolderMenu } from "./NewFolderDialog";
+import {
+  NewFolderDialog,
+  PathListEntryContextMenu,
+  PathListPaneContextMenu,
+  type PathNameDialogKind,
+} from "./NewFolderDialog";
 import { ScanSettingsPopover } from "./ScanSettingsPopover";
 
 export interface CompareViewProps {
@@ -59,7 +72,16 @@ export interface CompareViewProps {
   onStart: () => void;
   onStop: () => void;
   onScanSettingsChange: (updates: Partial<DataRelayRule> & { scanCheckpoint?: DataRelayRule["scanCheckpoint"] | null }) => void;
+  onOpenTerminalAtPath?: (host: Host, path: string) => void;
+  onPersistBrowsePaths?: (paths: { sourcePath?: string; destPath?: string }) => void;
 }
+
+const COMPARE_LOG_HEIGHT_MIN = 80;
+const COMPARE_LOG_HEIGHT_DEFAULT = 112;
+const COMPARE_LOG_HEIGHT_MAX = 480;
+
+const clampCompareLogHeight = (height: number): number =>
+  Math.max(COMPARE_LOG_HEIGHT_MIN, Math.min(COMPARE_LOG_HEIGHT_MAX, height));
 
 const hostLabel = (host?: Host): string => host?.label || host?.hostname || "—";
 
@@ -99,6 +121,11 @@ const ComparePane: React.FC<{
   onHome: () => void;
   onRefresh: () => void;
   onNewFolder: () => void;
+  onNewFile: () => void;
+  onCopyPath: (file?: DataRelayCompareFile) => void;
+  onCopy: (file: DataRelayCompareFile) => void;
+  onPaste: () => void;
+  onOpenTerminal?: (file?: DataRelayCompareFile) => void;
 }> = ({
   side,
   title,
@@ -115,13 +142,29 @@ const ComparePane: React.FC<{
   onHome,
   onRefresh,
   onNewFolder,
+  onNewFile,
+  onCopyPath,
+  onCopy,
+  onPaste,
+  onOpenTerminal,
 }) => {
   const { t } = useI18n();
   const parentPath = getParentPath(pane.path);
   const atRoot = isWindowsPath(pane.path)
     ? isWindowsRoot(pane.path)
     : pane.path === "/" || parentPath === pane.path;
-  const canCreateFolder = pane.ready && !pane.connecting && !busy;
+  const canMutate = pane.ready && !pane.connecting && !busy;
+  const canOpenTerminal = Boolean(onOpenTerminal && host);
+  const paneActions = {
+    disabled: !canMutate,
+    canOpenTerminal,
+    onCopyPath: () => onCopyPath(),
+    onPaste,
+    onNewFolder,
+    onNewFile,
+    onOpenTerminal: onOpenTerminal ? () => onOpenTerminal() : undefined,
+    onRefresh,
+  };
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-card">
@@ -178,7 +221,7 @@ const ComparePane: React.FC<{
             <Loader2 size={18} className="animate-spin text-muted-foreground" />
           </div>
         )}
-        <PathListNewFolderMenu disabled={!canCreateFolder} onNewFolder={onNewFolder}>
+        <PathListPaneContextMenu {...paneActions}>
           {pane.error ? (
             <div className="flex h-full items-center justify-center px-4 text-center text-xs text-destructive">
               {pane.error}
@@ -198,34 +241,45 @@ const ComparePane: React.FC<{
                       ? undefined
                       : kind;
                   return (
-                    <button
+                    <PathListEntryContextMenu
                       key={`${side}:${file.name}`}
-                      type="button"
-                      className={cn(
-                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-foreground/5",
-                        selectedName === file.name && "bg-accent text-accent-foreground",
-                        visibleKind && kindClass(visibleKind),
-                      )}
-                      onClick={() => onSelect(file.name)}
-                      onDoubleClick={() => onOpen(file)}
+                      disabled={!canMutate}
+                      canOpenTerminal={canOpenTerminal}
+                      onCopyPath={() => onCopyPath(file)}
+                      onCopy={() => onCopy(file)}
+                      onPaste={onPaste}
+                      onNewFolder={onNewFolder}
+                      onNewFile={onNewFile}
+                      onOpenTerminal={onOpenTerminal ? () => onOpenTerminal(file) : undefined}
                     >
-                      {isDir(file)
-                        ? <Folder size={14} className="shrink-0 text-amber-500" />
-                        : <File size={14} className="shrink-0 text-muted-foreground" />}
-                      <span className="min-w-0 flex-1 truncate font-mono">{file.name}</span>
-                      <span className="w-20 shrink-0 text-right text-[10px] text-muted-foreground">
-                        {isDir(file) ? "" : formatFileSize(file.size)}
-                      </span>
-                      <span className="w-[9.5rem] shrink-0 text-right text-[10px] text-muted-foreground">
-                        {formatDate(file.lastModified)}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-foreground/5",
+                          selectedName === file.name && "bg-accent text-accent-foreground",
+                          visibleKind && kindClass(visibleKind),
+                        )}
+                        onClick={() => onSelect(file.name)}
+                        onDoubleClick={() => onOpen(file)}
+                      >
+                        {isDir(file)
+                          ? <Folder size={14} className="shrink-0 text-amber-500" />
+                          : <File size={14} className="shrink-0 text-muted-foreground" />}
+                        <span className="min-w-0 flex-1 truncate font-mono">{file.name}</span>
+                        <span className="w-20 shrink-0 text-right text-[10px] text-muted-foreground">
+                          {isDir(file) ? "" : formatFileSize(file.size)}
+                        </span>
+                        <span className="w-[9.5rem] shrink-0 text-right text-[10px] text-muted-foreground">
+                          {formatDate(file.lastModified)}
+                        </span>
+                      </button>
+                    </PathListEntryContextMenu>
                   );
                 })}
               </div>
             </ScrollArea>
           )}
-        </PathListNewFolderMenu>
+        </PathListPaneContextMenu>
       </div>
     </div>
   );
@@ -245,6 +299,8 @@ export const CompareView: React.FC<CompareViewProps> = ({
   onStart,
   onStop,
   onScanSettingsChange,
+  onOpenTerminalAtPath,
+  onPersistBrowsePaths,
 }) => {
   const { t } = useI18n();
   const {
@@ -264,6 +320,9 @@ export const CompareView: React.FC<CompareViewProps> = ({
     navigate,
     goParent,
     createFolder,
+    createFile,
+    copyEntries,
+    pasteEntries,
     openEntry,
     runCompare,
     copySelection,
@@ -280,46 +339,172 @@ export const CompareView: React.FC<CompareViewProps> = ({
     terminalSettings,
   });
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [newFolderSide, setNewFolderSide] = useState<DataRelayCompareSide | null>(null);
+  const [nameDialog, setNameDialog] = useState<{
+    side: DataRelayCompareSide;
+    kind: PathNameDialogKind;
+  } | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [createFolderError, setCreateFolderError] = useState<string | null>(null);
+  const [logHeight, setLogHeight, persistLogHeight] = useStoredNumber(
+    STORAGE_KEY_DATA_RELAY_COMPARE_LOG_HEIGHT,
+    COMPARE_LOG_HEIGHT_DEFAULT,
+    { min: COMPARE_LOG_HEIGHT_MIN, max: COMPARE_LOG_HEIGHT_MAX },
+  );
+  const logHeightRef = useRef(logHeight);
+  const logDragRef = useRef<{ startY: number; startHeight: number } | null>(null);
+  logHeightRef.current = logHeight;
   const running = isRelayRuleRunning(rule);
 
-  const openNewFolderDialog = useCallback((side: DataRelayCompareSide) => {
-    setNewFolderSide(side);
-    setNewFolderName("");
-    setCreateFolderError(null);
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      const drag = logDragRef.current;
+      if (!drag) return;
+      setLogHeight(clampCompareLogHeight(drag.startHeight + (drag.startY - event.clientY)));
+    };
+    const handleMouseUp = () => {
+      if (!logDragRef.current) return;
+      logDragRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      persistLogHeight(logHeightRef.current);
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [persistLogHeight, setLogHeight]);
+
+  const handleLogResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    logDragRef.current = {
+      startY: event.clientY,
+      startHeight: logHeight,
+    };
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  }, [logHeight]);
+
+  const persistBrowsePaths = useCallback(() => {
+    if (!onPersistBrowsePaths) return;
+    onPersistBrowsePaths({
+      sourcePath: left.ready ? left.path : undefined,
+      destPath: right.ready ? right.path : undefined,
+    });
+  }, [left.path, left.ready, onPersistBrowsePaths, right.path, right.ready]);
+  const persistBrowsePathsRef = useRef(persistBrowsePaths);
+  persistBrowsePathsRef.current = persistBrowsePaths;
+
+  useEffect(() => {
+    return () => {
+      persistBrowsePathsRef.current();
+    };
   }, []);
 
-  const handleCreateFolder = useCallback(async () => {
-    if (!newFolderSide) return;
+  const copyPathToClipboard = useCallback(async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      toast.success(t("sftp.copyCurrentPath.success"));
+    } catch {
+      toast.error(t("sftp.copyCurrentPath.error"));
+    }
+  }, [t]);
+
+  const notifyPasteError = useCallback((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message === "empty") toast.error(t("dataRelay.context.pasteEmpty"));
+    else if (message === "same-path") toast.info(t("dataRelay.context.pasteSamePath"));
+    else if (message === "source-gone") toast.error(t("dataRelay.context.pasteSourceGone"));
+    else toast.error(message || t("dataRelay.context.pasteFailed"));
+  }, [t]);
+
+  const openNameDialog = useCallback((side: DataRelayCompareSide, kind: PathNameDialogKind) => {
+    const pane = side === "left" ? left : right;
+    setNameDialog({ side, kind });
+    setNewFolderName(kind === "file" ? getNextUntitledName(pane.files.map((file) => file.name)) : "");
+    setCreateFolderError(null);
+  }, [left, right]);
+
+  const handleCreateNamedEntry = useCallback(async () => {
+    if (!nameDialog) return;
     setCreatingFolder(true);
     setCreateFolderError(null);
     try {
-      await createFolder(newFolderSide, newFolderName);
-      setNewFolderSide(null);
+      if (nameDialog.kind === "file") {
+        await createFile(nameDialog.side, newFolderName);
+      } else {
+        await createFolder(nameDialog.side, newFolderName);
+      }
+      setNameDialog(null);
       setNewFolderName("");
     } catch (err) {
-      setCreateFolderError(err instanceof Error ? err.message : t("sftp.error.createFolderFailed"));
+      setCreateFolderError(
+        err instanceof Error
+          ? err.message
+          : t(nameDialog.kind === "file" ? "sftp.error.createFileFailed" : "sftp.error.createFolderFailed"),
+      );
     } finally {
       setCreatingFolder(false);
     }
-  }, [createFolder, newFolderName, newFolderSide, t]);
+  }, [createFile, createFolder, nameDialog, newFolderName, t]);
+
+  const handleCopyPath = useCallback((side: DataRelayCompareSide, file?: DataRelayCompareFile) => {
+    const pane = side === "left" ? left : right;
+    void copyPathToClipboard(file ? joinPath(pane.path, file.name) : pane.path);
+  }, [copyPathToClipboard, left, right]);
+
+  const handleCopy = useCallback((side: DataRelayCompareSide, file: DataRelayCompareFile) => {
+    const count = copyEntries(side, [file]);
+    if (count > 0) toast.success(t("dataRelay.context.copySuccess", { count }));
+  }, [copyEntries, t]);
+
+  const handlePaste = useCallback(async (side: DataRelayCompareSide) => {
+    try {
+      const result = await pasteEntries(side);
+      if (result.copied.length > 0) {
+        toast.success(t("dataRelay.context.pasteSuccess", { count: result.copied.length }));
+      }
+    } catch (err) {
+      notifyPasteError(err);
+    }
+  }, [notifyPasteError, pasteEntries, t]);
+
+  const handleOpenTerminal = useCallback((side: DataRelayCompareSide, file?: DataRelayCompareFile) => {
+    const host = side === "left" ? sourceHost : destHost;
+    if (!host || !onOpenTerminalAtPath) return;
+    const pane = side === "left" ? left : right;
+    onOpenTerminalAtPath(
+      host,
+      resolveOpenTerminalPath(pane.path, file ? { name: file.name, isDirectory: isDir(file) } : null),
+    );
+  }, [destHost, left, onOpenTerminalAtPath, right, sourceHost]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
-        <Button type="button" variant="ghost" size="sm" className="h-8 gap-1 px-2" onClick={onBack}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1 px-2"
+          onClick={() => {
+            persistBrowsePaths();
+            onBack();
+          }}
+        >
           <ArrowLeft size={14} />
           {t("common.back")}
         </Button>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">{rule.label}</div>
           <div className="truncate font-mono text-[11px] text-muted-foreground">
-            {hostLabel(sourceHost)} {rule.sourcePath || rule.sourceCommand}
+            {hostLabel(sourceHost)} {left.ready ? left.path : (rule.sourcePath || rule.sourceCommand)}
             <span className="mx-1 opacity-60">-&gt;</span>
-            {hostLabel(destHost)} {rule.destPath}
+            {hostLabel(destHost)} {right.ready ? right.path : rule.destPath}
           </div>
         </div>
         <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-medium", getRelayStatusTone(rule.status))}>
@@ -370,7 +555,12 @@ export const CompareView: React.FC<CompareViewProps> = ({
           onParent={() => goParent("left")}
           onHome={() => void navigate("left", left.homeDir)}
           onRefresh={() => void navigate("left", left.path)}
-          onNewFolder={() => openNewFolderDialog("left")}
+          onNewFolder={() => openNameDialog("left", "folder")}
+          onNewFile={() => openNameDialog("left", "file")}
+          onCopyPath={(file) => handleCopyPath("left", file)}
+          onCopy={(file) => handleCopy("left", file)}
+          onPaste={() => void handlePaste("left")}
+          onOpenTerminal={onOpenTerminalAtPath ? (file) => handleOpenTerminal("left", file) : undefined}
         />
         <div className="hidden w-6 shrink-0 items-center justify-center md:flex">
           <ArrowLeftRight size={16} className="text-muted-foreground" />
@@ -390,12 +580,31 @@ export const CompareView: React.FC<CompareViewProps> = ({
           onParent={() => goParent("right")}
           onHome={() => void navigate("right", right.homeDir)}
           onRefresh={() => void navigate("right", right.path)}
-          onNewFolder={() => openNewFolderDialog("right")}
+          onNewFolder={() => openNameDialog("right", "folder")}
+          onNewFile={() => openNameDialog("right", "file")}
+          onCopyPath={(file) => handleCopyPath("right", file)}
+          onCopy={(file) => handleCopy("right", file)}
+          onPaste={() => void handlePaste("right")}
+          onOpenTerminal={onOpenTerminalAtPath ? (file) => handleOpenTerminal("right", file) : undefined}
         />
       </div>
 
-      <div className="flex h-28 shrink-0 flex-col border-t border-border/60 bg-muted/20">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border/60 px-3 py-1.5 text-[11px]">
+      <div
+        className="flex shrink-0 flex-col border-t border-border/60 bg-muted/20"
+        style={{ height: logHeight }}
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className="group flex h-3 shrink-0 cursor-row-resize items-center justify-center text-muted-foreground/70"
+              onMouseDown={handleLogResizeStart}
+            >
+              <GripHorizontal size={14} className="transition-colors group-hover:text-foreground/80" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>{t("sftp.transfers.dragToResize")}</TooltipContent>
+        </Tooltip>
+        <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-border/60 px-3 py-1.5 text-[11px]">
           <span className="font-medium">{t("dataRelay.compare.syncInfo")}</span>
           <span>{t("dataRelay.compare.summary.same")}: {summary.same}</span>
           <span className="text-sky-700 dark:text-sky-300">
@@ -448,7 +657,8 @@ export const CompareView: React.FC<CompareViewProps> = ({
       />
 
       <NewFolderDialog
-        open={newFolderSide !== null}
+        open={nameDialog !== null}
+        kind={nameDialog?.kind ?? "folder"}
         name={newFolderName}
         creating={creatingFolder}
         error={createFolderError}
@@ -458,12 +668,12 @@ export const CompareView: React.FC<CompareViewProps> = ({
         }}
         onOpenChange={(open) => {
           if (!open) {
-            setNewFolderSide(null);
+            setNameDialog(null);
             setNewFolderName("");
             setCreateFolderError(null);
           }
         }}
-        onCreate={() => void handleCreateFolder()}
+        onCreate={() => void handleCreateNamedEntry()}
       />
     </div>
   );

@@ -1371,7 +1371,12 @@ export function AppSideEffects() {
   ), [createWorkspaceFromTargets, resolveEffectiveHost]);
 
   // Wrapper to connect to host with logging
-  const handleConnectToHost = useCallback((host: Host, alreadyEffective = false, hidden = false) => {
+  const handleConnectToHost = useCallback((
+    host: Host,
+    alreadyEffective = false,
+    hidden = false,
+    options?: { pendingInitialCwd?: string },
+  ) => {
     if (host.ephemeral) {
       setEphemeralHosts((previous) => {
         const existingIndex = previous.findIndex((candidate) => candidate.id === host.id);
@@ -1391,7 +1396,7 @@ export function AppSideEffects() {
       resolveEffectiveHost: effectiveHostResolver,
       resolveHostAuth,
       systemInfoRef,
-    }), host, hidden);
+    }), host, hidden, options);
   }, [addConnectionLog, connectToHost, resolveEffectiveHost, identities, keys]);
 
   const openHostForVaultAgent = useCallback((host: Host, isExternalMcpCall: boolean) => {

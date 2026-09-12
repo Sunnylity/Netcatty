@@ -245,6 +245,7 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
     onImportOrReuseKey,
     onOpenLogView,
     onOpenSettings,
+    onOpenTerminalAtPath,
     onRunSnippet,
     onUpdateCustomGroups,
     onUpdateGroupConfigs,
@@ -1414,6 +1415,7 @@ export function VaultViewLayout({ ctx }: { ctx: VaultViewLayoutContext }) {
                     identities={identities}
                     knownHosts={knownHosts}
                     terminalSettings={terminalSettings}
+                    onOpenTerminalAtPath={onOpenTerminalAtPath}
                   />
                 </Suspense>
               </LazyLoadBoundary>

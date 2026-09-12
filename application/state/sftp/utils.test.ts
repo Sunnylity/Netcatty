@@ -5,6 +5,7 @@ import {
   getParentPath,
   getFileName,
   isSafeNewFolderName,
+  getNextUntitledName,
   getSftpBreadcrumbSegments,
   getSftpFilterAfterPathChange,
   getSftpFilterAfterPathChangeError,
@@ -376,6 +377,13 @@ test("isSafeNewFolderName rejects empty, traversal, and separator names", () => 
   assert.equal(isSafeNewFolderName(".."), false);
   assert.equal(isSafeNewFolderName("a/b"), false);
   assert.equal(isSafeNewFolderName("a\\b"), false);
+});
+
+test("getNextUntitledName increments around existing untitled files", () => {
+  assert.equal(getNextUntitledName([]), "untitled.txt");
+  assert.equal(getNextUntitledName(["readme.md"]), "untitled.txt");
+  assert.equal(getNextUntitledName(["untitled.txt"]), "untitled (1).txt");
+  assert.equal(getNextUntitledName(["UNTITLED.TXT", "untitled (1).txt"]), "untitled (2).txt");
 });
 
 test("getSftpPathRoot resolves the filesystem root for breadcrumb navigation", () => {

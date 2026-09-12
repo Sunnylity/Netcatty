@@ -43,6 +43,30 @@ test('connect host handler returns the created terminal tab id', () => {
   assert.equal(logs.length, 1);
 });
 
+test('connect host handler passes pendingInitialCwd through to connectToHost', () => {
+  const connected: Array<{ host: Host; options?: { pendingInitialCwd?: string } }> = [];
+  handleConnectToHostImpl(
+    () => ({
+      addConnectionLog: () => {},
+      connectToHost: (host: Host, options?: { pendingInitialCwd?: string }) => {
+        connected.push({ host, options });
+        return 'session-cwd';
+      },
+      identities: [],
+      keys: [],
+      resolveEffectiveHost: (host: Host) => host,
+      resolveHostAuth: () => ({ username: 'root' }),
+      systemInfoRef: { current: { username: 'local-user', hostname: 'local-host' } },
+    }),
+    baseHost,
+    false,
+    { pendingInitialCwd: '/var/log' },
+  );
+
+  assert.equal(connected.length, 1);
+  assert.equal(connected[0]?.options?.pendingInitialCwd, '/var/log');
+});
+
 test('connect logs use the same Mosh-before-ET protocol precedence as the launcher', () => {
   const logs: Array<{ protocol?: string }> = [];
   handleConnectToHostImpl(

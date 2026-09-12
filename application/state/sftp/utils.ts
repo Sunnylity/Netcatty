@@ -256,6 +256,16 @@ export const isSafeNewFolderName = (name: string): boolean => {
   return !/[\\/]/.test(trimmed);
 };
 
+export const getNextUntitledName = (existingFiles: readonly string[]): string => {
+  const existingSet = new Set(existingFiles.map((file) => file.toLowerCase()));
+  if (!existingSet.has("untitled.txt")) return "untitled.txt";
+  for (let counter = 1; counter < 1000; counter += 1) {
+    const name = `untitled (${counter}).txt`;
+    if (!existingSet.has(name.toLowerCase())) return name;
+  }
+  return `untitled_${Date.now()}.txt`;
+};
+
 export const joinPath = (base: string, name: string): string => {
   if (isWindowsPath(base)) {
     const normalizedBase = normalizeWindowsRoot(base).replace(/[\\/]+$/, "");

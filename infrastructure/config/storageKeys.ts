@@ -39,6 +39,8 @@ export const STORAGE_KEY_DATA_RELAY = 'netcatty_data_relay_v1';
 /** Width (px) shared by data relay edit / new panels. */
 export const STORAGE_KEY_DATA_RELAY_PANEL_WIDTH = 'netcatty_data_relay_panel_width_v1';
 export const STORAGE_KEY_DATA_RELAY_VIEW_MODE = 'netcatty_data_relay_view_mode_v1';
+/** Height (px) of the compare-view sync-info log bar. */
+export const STORAGE_KEY_DATA_RELAY_COMPARE_LOG_HEIGHT = 'netcatty_data_relay_compare_log_height_v1';
 export const STORAGE_KEY_KNOWN_HOSTS = 'netcatty_known_hosts_v1';
 export const STORAGE_KEY_SHELL_HISTORY = 'netcatty_shell_history_v1';
 export const STORAGE_KEY_CONNECTION_LOGS = 'netcatty_connection_logs_v1';

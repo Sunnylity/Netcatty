@@ -22,6 +22,12 @@ import {
   type DataRelayCompareSyncDirection,
 } from "../../domain/dataRelayCompare";
 import { resolveDataRelayViewerStart, stripDataRelayTrailingSep, usesWindowsDataRelayPath } from "../../domain/dataRelayPaths";
+import { copyRemotePathEntries } from "./sftp/copyRemotePathEntries";
+import {
+  getDataRelayPathClipboard,
+  setDataRelayPathClipboard,
+  type DataRelayPathClipboardEntry,
+} from "./sftp/dataRelayPathClipboardStore";
 import { getParentPath, isSafeNewFolderName, isWindowsPath, isWindowsRoot, joinPath, joinTransferTargetPath } from "./sftp/utils";
 import { buildSftpHostCredentials } from "./sftp/useSftpHostCredentials";
 import { useSftpBackend } from "./useSftpBackend";
@@ -98,6 +104,8 @@ export function useDataRelayCompareSession({
     listSftp,
     getSftpHomeDir,
     mkdirSftp,
+    writeSftp,
+    writeSftpBinary,
     startStreamTransfer,
   } = useSftpBackend();
   const [left, setLeft] = useState<DataRelayComparePaneState>({
@@ -557,6 +565,112 @@ export function useDataRelayCompareSession({
     }
   }, [appendLog, listPane, mkdirSftp]);
 
+  const createFile = useCallback(async (side: DataRelayCompareSide, name: string) => {
+    const trimmed = name.trim();
+    if (!isSafeNewFolderName(trimmed)) {
+      throw new Error("Invalid file name");
+    }
+    const sftpId = side === "left" ? leftSftpRef.current : rightSftpRef.current;
+    const pane = side === "left" ? leftRef.current : rightRef.current;
+    if (!sftpId || !pane.ready) {
+      throw new Error("SFTP session not ready");
+    }
+    const fullPath = joinPath(pane.path, trimmed);
+    try {
+      try {
+        await writeSftpBinary(sftpId, fullPath, new ArrayBuffer(0));
+      } catch {
+        await writeSftp(sftpId, fullPath, "");
+      }
+      await listPane(side, sftpId, pane.path);
+      setSelectedName(trimmed);
+      appendLog(`Created ${fullPath}`, "success");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      appendLog(message, "error");
+      throw err;
+    }
+  }, [appendLog, listPane, writeSftp, writeSftpBinary]);
+
+  const copyEntries = useCallback((side: DataRelayCompareSide, files: DataRelayCompareFile[]) => {
+    const pane = side === "left" ? leftRef.current : rightRef.current;
+    const hostId = side === "left" ? rule.sourceHostId : rule.destHostId;
+    const entries: DataRelayPathClipboardEntry[] = files
+      .filter((file) => isSafeNewFolderName(file.name))
+      .map((file) => ({
+        name: file.name,
+        isDirectory: isDir(file),
+        size: file.size,
+      }));
+    if (entries.length === 0) return 0;
+    setDataRelayPathClipboard({
+      files: entries,
+      sourcePath: pane.path,
+      sourceHostId: hostId,
+    });
+    return entries.length;
+  }, [rule.destHostId, rule.sourceHostId]);
+
+  const pasteEntries = useCallback(async (side: DataRelayCompareSide) => {
+    const clip = getDataRelayPathClipboard();
+    if (!clip?.files.length) {
+      throw new Error("empty");
+    }
+    const destPane = side === "left" ? leftRef.current : rightRef.current;
+    const destSftpId = side === "left" ? leftSftpRef.current : rightSftpRef.current;
+    const destHostId = side === "left" ? rule.sourceHostId : rule.destHostId;
+    const sourceSftpId = clip.sourceHostId === rule.sourceHostId
+      ? leftSftpRef.current
+      : clip.sourceHostId === rule.destHostId
+        ? rightSftpRef.current
+        : null;
+    if (!destSftpId || !destPane.ready) {
+      throw new Error("SFTP session not ready");
+    }
+    if (!sourceSftpId) {
+      throw new Error("source-gone");
+    }
+
+    setCopying(true);
+    try {
+      const result = await copyRemotePathEntries({
+        sourceSftpId,
+        destSftpId,
+        sourceHostId: clip.sourceHostId,
+        destHostId,
+        sourcePath: clip.sourcePath,
+        destPath: destPane.path,
+        entries: clip.files,
+        list: async (sftpId, path) => {
+          const raw = await listSftp(sftpId, path);
+          return (raw ?? []).map(toCompareFile).filter((file): file is DataRelayCompareFile => Boolean(file));
+        },
+        mkdir: mkdirSftp,
+        transfer: startStreamTransfer,
+      });
+      await listPane(side, destSftpId, destPane.path);
+      if (result.skipped.length > 0 && result.copied.length === 0 && result.failed.length === 0) {
+        throw new Error("same-path");
+      }
+      if (result.failed.length > 0) {
+        appendLog(`Paste failed: ${result.failed.join(", ")}`, "error");
+      }
+      if (result.copied.length > 0) {
+        appendLog(`Pasted ${result.copied.length} item(s)`, "success");
+      }
+      return result;
+    } catch (err) {
+      if (err instanceof Error && (err.message === "same-path" || err.message === "empty" || err.message === "source-gone")) {
+        throw err;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      appendLog(message, "error");
+      throw err;
+    } finally {
+      setCopying(false);
+    }
+  }, [appendLog, listPane, listSftp, mkdirSftp, rule.destHostId, rule.sourceHostId, startStreamTransfer]);
+
   return {
     left,
     right,
@@ -574,6 +688,9 @@ export function useDataRelayCompareSession({
     navigate,
     goParent,
     createFolder,
+    createFile,
+    copyEntries,
+    pasteEntries,
     openEntry,
     runCompare,
     cancelCompare,

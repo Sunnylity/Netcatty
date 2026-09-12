@@ -35,6 +35,7 @@ export interface RuleFormPanelProps extends RemotePathBrowserHostContext {
   onDuplicate?: () => void;
   onDelete?: () => void;
   isValid: boolean;
+  onOpenTerminalAtPath?: (host: Host, path: string) => void;
 }
 
 const isRelayCapableHost = (host: Host): boolean => !host.protocol || host.protocol === 'ssh';
@@ -59,6 +60,7 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
   onDuplicate,
   onDelete,
   isValid,
+  onOpenTerminalAtPath,
 }) => {
   const { t } = useI18n();
   const sshHosts = hosts.filter(isRelayCapableHost);
@@ -288,6 +290,7 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
         onOpenChange={(open) => {
           if (!open) setBrowser(null);
         }}
+        onOpenTerminalAtPath={onOpenTerminalAtPath}
       />
       <RemotePathBrowserDialog
         open={browser === 'dest'}
@@ -303,6 +306,7 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
         onOpenChange={(open) => {
           if (!open) setBrowser(null);
         }}
+        onOpenTerminalAtPath={onOpenTerminalAtPath}
       />
     </AsidePanel>
   );

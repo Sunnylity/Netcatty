@@ -1046,7 +1046,12 @@ export function handleCreateLocalTerminalImpl(
   }
 }
 
-export function handleConnectToHostImpl(getCtx: AppContextGetter, host: Host, hidden = false) {
+export function handleConnectToHostImpl(
+  getCtx: AppContextGetter,
+  host: Host,
+  hidden = false,
+  connectOptions?: { pendingInitialCwd?: string },
+) {
   const { addConnectionLog, connectToHost, identities, keys, resolveEffectiveHost, resolveHostAuth, systemInfoRef } = getCtx();
 {
     const { username, hostname: localHost } = systemInfoRef.current;
@@ -1075,7 +1080,10 @@ export function handleConnectToHostImpl(getCtx: AppContextGetter, host: Host, hi
 
     const protocol = resolveEffectiveTerminalProtocol(effectiveHost);
     const resolvedAuth = resolveHostAuth({ host: effectiveHost, keys, identities });
-    const sessionId = connectToHost(effectiveHost, { hidden });
+    const sessionId = connectToHost(effectiveHost, {
+      hidden,
+      pendingInitialCwd: connectOptions?.pendingInitialCwd,
+    });
     addConnectionLog({
       sessionId,
       hostId: host.id,

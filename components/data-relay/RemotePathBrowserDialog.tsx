@@ -1,11 +1,14 @@
-import { ArrowUp, Folder, Home, Loader2, RefreshCw } from "lucide-react";
+import { ArrowUp, File, Folder, Home, Loader2, RefreshCw } from "lucide-react";
 import React, { useCallback, useMemo, useState } from "react";
 import { useI18n } from "../../application/i18n/I18nProvider";
+import { resolveOpenTerminalPath } from "../../application/state/sftp/copyRemotePathEntries";
 import {
+  isRemotePathBrowserDirectory,
   useRemotePathBrowser,
   type RemotePathBrowserEntry,
 } from "../../application/state/sftp/useRemotePathBrowser";
 import {
+  getNextUntitledName,
   getParentPath,
   isWindowsPath,
   isWindowsRoot,
@@ -30,7 +33,13 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { ScrollArea } from "../ui/scroll-area";
-import { NewFolderDialog, PathListNewFolderMenu } from "./NewFolderDialog";
+import { toast } from "../ui/toast";
+import {
+  NewFolderDialog,
+  PathListEntryContextMenu,
+  PathListPaneContextMenu,
+  type PathNameDialogKind,
+} from "./NewFolderDialog";
 
 export interface RemotePathBrowserHostContext {
   hosts: Host[];
@@ -50,6 +59,7 @@ export interface RemotePathBrowserDialogProps extends RemotePathBrowserHostConte
   title: string;
   onSelect: (path: string) => void;
   onOpenChange: (open: boolean) => void;
+  onOpenTerminalAtPath?: (host: Host, path: string) => void;
 }
 
 export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = ({
@@ -64,12 +74,14 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
   title,
   onSelect,
   onOpenChange,
+  onOpenTerminalAtPath,
 }) => {
   const { t } = useI18n();
-  const [showNewFolder, setShowNewFolder] = useState(false);
+  const [nameDialogKind, setNameDialogKind] = useState<PathNameDialogKind | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [createFolderError, setCreateFolderError] = useState<string | null>(null);
+  const [pasting, setPasting] = useState(false);
   const {
     connecting,
     listing,
@@ -82,6 +94,9 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
     sftpReady,
     navigateTo,
     createFolder,
+    createFile,
+    copyEntries,
+    pasteEntries,
   } = useRemotePathBrowser({
     open,
     host,
@@ -104,7 +119,7 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
     : currentPath === "/" || parentPath === currentPath;
 
   const confirmPath = useCallback((): string | null => {
-    if (selectedEntry) {
+    if (selectedEntry && isRemotePathBrowserDirectory(selectedEntry)) {
       return toDataRelayDirectoryHint(joinPath(currentPath, selectedEntry.name));
     }
     if (!currentPath) return null;
@@ -116,7 +131,7 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
   const handleConfirm = useCallback(() => {
     const path = confirmPath();
     if (!path) return;
-    setShowNewFolder(false);
+    setNameDialogKind(null);
     setNewFolderName("");
     setCreateFolderError(null);
     onSelect(path);
@@ -124,39 +139,111 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
   }, [confirmPath, onSelect, onOpenChange]);
 
   const handleOpenEntry = useCallback((entry: RemotePathBrowserEntry) => {
+    if (!isRemotePathBrowserDirectory(entry)) return;
     void navigateTo(joinPath(currentPath, entry.name));
   }, [currentPath, navigateTo]);
 
-  const canCreateFolder = sftpReady && !connecting;
+  const canMutate = sftpReady && !connecting && !pasting;
+  const canOpenTerminal = Boolean(onOpenTerminalAtPath && host);
 
-  const openNewFolderDialog = useCallback(() => {
-    setNewFolderName("");
+  const copyPathToClipboard = useCallback(async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      toast.success(t("sftp.copyCurrentPath.success"));
+    } catch {
+      toast.error(t("sftp.copyCurrentPath.error"));
+    }
+  }, [t]);
+
+  const notifyPasteError = useCallback((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message === "empty") toast.error(t("dataRelay.context.pasteEmpty"));
+    else if (message === "same-path") toast.info(t("dataRelay.context.pasteSamePath"));
+    else if (message === "source-gone") toast.error(t("dataRelay.context.pasteSourceGone"));
+    else toast.error(message || t("dataRelay.context.pasteFailed"));
+  }, [t]);
+
+  const openNameDialog = useCallback((kind: PathNameDialogKind) => {
+    setNameDialogKind(kind);
+    setNewFolderName(kind === "file" ? getNextUntitledName(entries.map((entry) => entry.name)) : "");
     setCreateFolderError(null);
-    setShowNewFolder(true);
-  }, []);
+  }, [entries]);
 
-  const handleCreateFolder = useCallback(async () => {
+  const handleCreateNamedEntry = useCallback(async () => {
+    if (!nameDialogKind) return;
     setCreatingFolder(true);
     setCreateFolderError(null);
     try {
-      await createFolder(newFolderName);
-      setShowNewFolder(false);
+      if (nameDialogKind === "file") await createFile(newFolderName);
+      else await createFolder(newFolderName);
+      setNameDialogKind(null);
       setNewFolderName("");
     } catch (err) {
-      setCreateFolderError(err instanceof Error ? err.message : t("sftp.error.createFolderFailed"));
+      setCreateFolderError(
+        err instanceof Error
+          ? err.message
+          : t(nameDialogKind === "file" ? "sftp.error.createFileFailed" : "sftp.error.createFolderFailed"),
+      );
     } finally {
       setCreatingFolder(false);
     }
-  }, [createFolder, newFolderName, t]);
+  }, [createFile, createFolder, nameDialogKind, newFolderName, t]);
+
+  const handleCopyPath = useCallback((entry?: RemotePathBrowserEntry) => {
+    void copyPathToClipboard(entry ? joinPath(currentPath, entry.name) : currentPath);
+  }, [copyPathToClipboard, currentPath]);
+
+  const handleCopy = useCallback((entry: RemotePathBrowserEntry) => {
+    const count = copyEntries([entry]);
+    if (count > 0) toast.success(t("dataRelay.context.copySuccess", { count }));
+  }, [copyEntries, t]);
+
+  const handlePaste = useCallback(async () => {
+    setPasting(true);
+    try {
+      const result = await pasteEntries();
+      if (result.copied.length > 0) {
+        toast.success(t("dataRelay.context.pasteSuccess", { count: result.copied.length }));
+      }
+    } catch (err) {
+      notifyPasteError(err);
+    } finally {
+      setPasting(false);
+    }
+  }, [notifyPasteError, pasteEntries, t]);
+
+  const handleOpenTerminal = useCallback((entry?: RemotePathBrowserEntry) => {
+    if (!host || !onOpenTerminalAtPath) return;
+    onOpenTerminalAtPath(
+      host,
+      resolveOpenTerminalPath(
+        currentPath,
+        entry
+          ? { name: entry.name, isDirectory: isRemotePathBrowserDirectory(entry) }
+          : null,
+      ),
+    );
+  }, [currentPath, host, onOpenTerminalAtPath]);
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (!nextOpen) {
-      setShowNewFolder(false);
+      setNameDialogKind(null);
       setNewFolderName("");
       setCreateFolderError(null);
     }
     onOpenChange(nextOpen);
   }, [onOpenChange]);
+
+  const paneActions = {
+    disabled: !canMutate,
+    canOpenTerminal,
+    onCopyPath: () => handleCopyPath(),
+    onPaste: () => void handlePaste(),
+    onNewFolder: () => openNameDialog("folder"),
+    onNewFile: () => openNameDialog("file"),
+    onOpenTerminal: onOpenTerminalAtPath ? () => handleOpenTerminal() : undefined,
+    onRefresh: () => void navigateTo(currentPath),
+  };
 
   return (
     <>
@@ -212,12 +299,12 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
           </div>
 
           <div className="relative min-h-[280px] flex-1 overflow-hidden rounded-md border border-border/60">
-            {(connecting || listing) && (
+            {(connecting || listing || pasting) && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70">
                 <Loader2 size={20} className="animate-spin text-muted-foreground" />
               </div>
             )}
-            <PathListNewFolderMenu disabled={!canCreateFolder} onNewFolder={openNewFolderDialog}>
+            <PathListPaneContextMenu {...paneActions}>
               {error ? (
                 <div className="flex h-full items-center justify-center px-4 text-center text-xs text-destructive">
                   {error}
@@ -231,26 +318,40 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
                   <div className="p-1">
                     {entries.map((entry) => {
                       const selected = entry.name === selectedName;
+                      const isDir = isRemotePathBrowserDirectory(entry);
                       return (
-                        <button
+                        <PathListEntryContextMenu
                           key={`${entry.type}:${entry.name}`}
-                          type="button"
-                          className={cn(
-                            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-foreground/5",
-                            selected && "bg-accent text-accent-foreground",
-                          )}
-                          onClick={() => setSelectedName(entry.name)}
-                          onDoubleClick={() => handleOpenEntry(entry)}
+                          disabled={!canMutate}
+                          canOpenTerminal={canOpenTerminal}
+                          onCopyPath={() => handleCopyPath(entry)}
+                          onCopy={() => handleCopy(entry)}
+                          onPaste={() => void handlePaste()}
+                          onNewFolder={() => openNameDialog("folder")}
+                          onNewFile={() => openNameDialog("file")}
+                          onOpenTerminal={onOpenTerminalAtPath ? () => handleOpenTerminal(entry) : undefined}
                         >
-                          <Folder size={14} className="shrink-0 text-amber-500" />
-                          <span className="truncate font-mono">{entry.name}</span>
-                        </button>
+                          <button
+                            type="button"
+                            className={cn(
+                              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-foreground/5",
+                              selected && "bg-accent text-accent-foreground",
+                            )}
+                            onClick={() => setSelectedName(entry.name)}
+                            onDoubleClick={() => handleOpenEntry(entry)}
+                          >
+                            {isDir
+                              ? <Folder size={14} className="shrink-0 text-amber-500" />
+                              : <File size={14} className="shrink-0 text-muted-foreground" />}
+                            <span className="truncate font-mono">{entry.name}</span>
+                          </button>
+                        </PathListEntryContextMenu>
                       );
                     })}
                   </div>
                 </ScrollArea>
               )}
-            </PathListNewFolderMenu>
+            </PathListPaneContextMenu>
           </div>
         </div>
 
@@ -265,7 +366,8 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
       </DialogContent>
     </Dialog>
     <NewFolderDialog
-      open={showNewFolder}
+      open={nameDialogKind !== null}
+      kind={nameDialogKind ?? "folder"}
       name={newFolderName}
       creating={creatingFolder}
       error={createFolderError}
@@ -274,13 +376,13 @@ export const RemotePathBrowserDialog: React.FC<RemotePathBrowserDialogProps> = (
         setCreateFolderError(null);
       }}
       onOpenChange={(nextOpen) => {
-        setShowNewFolder(nextOpen);
         if (!nextOpen) {
+          setNameDialogKind(null);
           setNewFolderName("");
           setCreateFolderError(null);
         }
       }}
-      onCreate={() => void handleCreateFolder()}
+      onCreate={() => void handleCreateNamedEntry()}
     />
     </>
   );

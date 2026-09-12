@@ -12,11 +12,18 @@ import {
   isDataRelayDirectoryHint,
   resolveDataRelayViewerStart,
 } from "../../../domain/dataRelayPaths";
+import { copyRemotePathEntries } from "./copyRemotePathEntries";
+import {
+  getDataRelayPathClipboard,
+  setDataRelayPathClipboard,
+  type DataRelayPathClipboardEntry,
+} from "./dataRelayPathClipboardStore";
+import type { DataRelayCompareFile } from "../../../domain/dataRelayCompare";
 import { getParentPath, isSafeNewFolderName, joinPath } from "./utils";
 import { buildSftpHostCredentials } from "./useSftpHostCredentials";
 import { useSftpBackend } from "../useSftpBackend";
 
-export type RemotePathBrowserEntry = Pick<RemoteFile, "name" | "type" | "linkTarget">;
+export type RemotePathBrowserEntry = Pick<RemoteFile, "name" | "type" | "linkTarget" | "size">;
 
 export interface UseRemotePathBrowserParams {
   open: boolean;
@@ -32,8 +39,10 @@ export interface UseRemotePathBrowserParams {
   initialPath?: string;
 }
 
-const isDirectoryEntry = (entry: RemotePathBrowserEntry): boolean =>
+export const isRemotePathBrowserDirectory = (entry: RemotePathBrowserEntry): boolean =>
   entry.type === "directory" || (entry.type === "symlink" && entry.linkTarget === "directory");
+
+const isDirectoryEntry = isRemotePathBrowserDirectory;
 
 const compareEntries = (a: RemotePathBrowserEntry, b: RemotePathBrowserEntry): number => {
   const aDir = isDirectoryEntry(a);
@@ -70,7 +79,16 @@ export function useRemotePathBrowser({
   terminalSettings,
   initialPath,
 }: UseRemotePathBrowserParams) {
-  const { openSftp, closeSftp, listSftp, getSftpHomeDir, mkdirSftp } = useSftpBackend();
+  const {
+    openSftp,
+    closeSftp,
+    listSftp,
+    getSftpHomeDir,
+    mkdirSftp,
+    writeSftp,
+    writeSftpBinary,
+    startStreamTransfer,
+  } = useSftpBackend();
   const [connecting, setConnecting] = useState(false);
   const [listing, setListing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,8 +126,8 @@ export function useRemotePathBrowser({
           name: entry.name,
           type: entry.type,
           linkTarget: entry.linkTarget,
+          size: entry.size,
         }))
-        .filter(isDirectoryEntry)
         .sort(compareEntries);
       setEntries(next);
       setCurrentPath(path);
@@ -217,6 +235,94 @@ export function useRemotePathBrowser({
     setSelectedName(trimmed);
   }, [listDirectory, mkdirSftp]);
 
+  const toCompareFiles = useCallback(async (sftpId: string, path: string): Promise<DataRelayCompareFile[]> => {
+    const raw = await listSftp(sftpId, path);
+    return (raw ?? [])
+      .filter((entry) => entry.name && entry.name !== "." && entry.name !== "..")
+      .map((entry) => ({
+        name: entry.name,
+        type: entry.type,
+        linkTarget: entry.linkTarget,
+        size: Number.parseInt(String(entry.size), 10) || 0,
+        lastModified: new Date(entry.lastModified).getTime() || 0,
+      }));
+  }, [listSftp]);
+
+  const createFile = useCallback(async (name: string) => {
+    const trimmed = name.trim();
+    if (!isSafeNewFolderName(trimmed)) {
+      throw new Error("Invalid file name");
+    }
+    const sftpId = sftpIdRef.current;
+    if (!sftpId) {
+      throw new Error("SFTP session not ready");
+    }
+    const parentPath = currentPathRef.current;
+    const fullPath = joinPath(parentPath, trimmed);
+    try {
+      await writeSftpBinary(sftpId, fullPath, new ArrayBuffer(0));
+    } catch {
+      await writeSftp(sftpId, fullPath, "");
+    }
+    await listDirectory(sftpId, parentPath);
+    setSelectedName(trimmed);
+  }, [listDirectory, writeSftp, writeSftpBinary]);
+
+  const copyEntries = useCallback((files: RemotePathBrowserEntry[]) => {
+    const hostId = credentialsRef.current.host?.id;
+    if (!hostId) return 0;
+    const entries: DataRelayPathClipboardEntry[] = files
+      .filter((file) => isSafeNewFolderName(file.name))
+      .map((file) => ({
+        name: file.name,
+        isDirectory: isDirectoryEntry(file),
+        size: Number.parseInt(String(file.size), 10) || 0,
+      }));
+    if (entries.length === 0) return 0;
+    setDataRelayPathClipboard({
+      files: entries,
+      sourcePath: currentPathRef.current,
+      sourceHostId: hostId,
+    });
+    return entries.length;
+  }, []);
+
+  const pasteEntries = useCallback(async () => {
+    const clip = getDataRelayPathClipboard();
+    if (!clip?.files.length) {
+      throw new Error("empty");
+    }
+    const sftpId = sftpIdRef.current;
+    const hostId = credentialsRef.current.host?.id;
+    if (!sftpId || !hostId) {
+      throw new Error("SFTP session not ready");
+    }
+    if (clip.sourceHostId !== hostId) {
+      throw new Error("source-gone");
+    }
+    const destPath = currentPathRef.current;
+    const result = await copyRemotePathEntries({
+      sourceSftpId: sftpId,
+      destSftpId: sftpId,
+      sourceHostId: clip.sourceHostId,
+      destHostId: hostId,
+      sourcePath: clip.sourcePath,
+      destPath,
+      entries: clip.files,
+      list: toCompareFiles,
+      mkdir: mkdirSftp,
+      transfer: startStreamTransfer,
+    });
+    await listDirectory(sftpId, destPath);
+    if (result.skipped.length > 0 && result.copied.length === 0 && result.failed.length === 0) {
+      throw new Error("same-path");
+    }
+    if (result.failed.length > 0 && result.copied.length === 0) {
+      throw new Error(result.failed[0] || "Paste failed");
+    }
+    return result;
+  }, [listDirectory, mkdirSftp, startStreamTransfer, toCompareFiles]);
+
   return {
     connecting,
     listing,
@@ -229,5 +335,8 @@ export function useRemotePathBrowser({
     sftpReady,
     navigateTo,
     createFolder,
+    createFile,
+    copyEntries,
+    pasteEntries,
   };
 }

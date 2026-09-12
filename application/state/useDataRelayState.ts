@@ -56,7 +56,7 @@ export interface UseDataRelayStateResult {
   viewMode: DataRelayViewMode;
   setViewMode: (mode: DataRelayViewMode) => void;
   createRule: (source: Record<string, unknown>) => DataRelayRuleMutationResult;
-  updateRule: (ruleId: string, source: Record<string, unknown>) => DataRelayRuleMutationResult;
+  updateRule: (ruleId: string, source: Record<string, unknown>, options?: { preserveRuntime?: boolean }) => DataRelayRuleMutationResult;
   duplicateRule: (ruleId: string) => DataRelayRuleMutationResult;
   deleteRule: (ruleId: string) => void;
   startRule: (ruleId: string) => Promise<{ success: boolean; error?: string }>;
@@ -270,13 +270,14 @@ export const useDataRelayState = ({
   );
 
   const updateRule = useCallback(
-    (ruleId: string, source: Record<string, unknown>): DataRelayRuleMutationResult => {
+    (ruleId: string, source: Record<string, unknown>, options?: { preserveRuntime?: boolean }): DataRelayRuleMutationResult => {
       const existing = rulesRef.current.find((rule) => rule.id === ruleId);
       if (!existing) return { ok: false, error: `Rule "${ruleId}" was not found.` };
-      const result = updateDataRelayRule(rulesRef.current, hostsRef.current, ruleId, source);
+      const result = updateDataRelayRule(rulesRef.current, hostsRef.current, ruleId, source, options);
       if ('error' in result) return { ok: false, error: result.error };
       const connectionChanged =
-        result.value.rule.status === "inactive"
+        !options?.preserveRuntime
+        && result.value.rule.status === "inactive"
         && (existing.status === "active" || existing.status === "connecting");
       if (connectionChanged) {
         void stopRuleRef.current(ruleId);

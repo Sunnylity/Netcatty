@@ -523,10 +523,16 @@ export const useSessionState = ({
     return sessionId;
   }, [setActiveTabId]);
 
-  const connectToHost = useCallback((host: Host, options?: { hidden?: boolean }) => {
+  const connectToHost = useCallback((host: Host, options?: { hidden?: boolean; pendingInitialCwd?: string }) => {
     const hidden = options?.hidden === true;
     const newSession = createHostTerminalSession(crypto.randomUUID(), host);
-    const sessionToAdd = hidden ? { ...newSession, hiddenFromTabs: true } : newSession;
+    const sessionToAdd = {
+      ...newSession,
+      ...(hidden ? { hiddenFromTabs: true } : {}),
+      ...(options?.pendingInitialCwd && newSession.protocol !== "serial"
+        ? { pendingInitialCwd: options.pendingInitialCwd }
+        : {}),
+    };
     setSessions(prev => [...prev, sessionToAdd]);
     if (!hidden) setActiveTabId(newSession.id);
     return newSession.id;
