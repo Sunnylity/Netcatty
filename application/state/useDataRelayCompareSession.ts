@@ -30,6 +30,8 @@ import {
   stripDataRelayTrailingSep,
   usesWindowsDataRelayPath,
 } from "../../domain/dataRelayPaths";
+import { isDataRelayLocalHostId } from "../../domain/dataRelayLocal";
+import { netcattyBridge } from "../../infrastructure/services/netcattyBridge";
 import { copyRemotePathEntries } from "./sftp/copyRemotePathEntries";
 import {
   getDataRelayPathClipboard,
@@ -174,9 +176,26 @@ export function useDataRelayCompareSession({
     }
   }, [closeSftp]);
 
+  // A null sftp id on a side means that side is the local machine.
+  const sideIsLocal = useCallback((side: DataRelayCompareSide): boolean =>
+    side === "left"
+      ? isDataRelayLocalHostId(rule.sourceHostId)
+      : isDataRelayLocalHostId(rule.destHostId),
+  [rule.destHostId, rule.sourceHostId]);
+
+  const sideSftpId = useCallback((side: DataRelayCompareSide): string | null => {
+    if (sideIsLocal(side)) return null;
+    return side === "left" ? leftSftpRef.current : rightSftpRef.current;
+  }, [sideIsLocal]);
+
+  const requireSideSftpId = useCallback((side: DataRelayCompareSide): string => {
+    const sftpId = sideSftpId(side);
+    if (!sftpId) throw new Error("SFTP session is not connected");
+    return sftpId;
+  }, [sideSftpId]);
+
   const listPane = useCallback(async (
     side: DataRelayCompareSide,
-    sftpId: string,
     path: string,
   ): Promise<DataRelayCompareFile[] | null> => {
     const genRef = side === "left" ? leftGenRef : rightGenRef;
@@ -184,7 +203,13 @@ export function useDataRelayCompareSession({
     const gen = ++genRef.current;
     setPane((current) => ({ ...current, listing: true, error: null }));
     try {
-      const raw = await listSftp(sftpId, path);
+      const raw = sideIsLocal(side)
+        ? await (async () => {
+          const bridge = netcattyBridge.get();
+          if (!bridge?.listLocalDir) throw new Error("Local filesystem bridge unavailable");
+          return bridge.listLocalDir(path);
+        })()
+        : await listSftp(requireSideSftpId(side), path);
       if (gen !== genRef.current) return null;
       const files = sortFiles((raw ?? []).map(toCompareFile).filter((file): file is DataRelayCompareFile => Boolean(file)));
       setPane((current) => ({ ...current, listing: false, path, files, error: null }));
@@ -198,7 +223,7 @@ export function useDataRelayCompareSession({
       }));
       return null;
     }
-  }, [listSftp]);
+  }, [listSftp, requireSideSftpId, sideIsLocal]);
 
   const connectPane = useCallback(async (
     side: DataRelayCompareSide,
@@ -217,22 +242,29 @@ export function useDataRelayCompareSession({
       path: previewPath,
     }));
     try {
-      const current = credsRef.current;
-      const credentials = buildSftpHostCredentials({
-        host,
-        hosts: current.hosts,
-        keys: current.keys,
-        identities: current.identities,
-        knownHosts: current.knownHosts,
-        terminalSettings: current.terminalSettings,
-      });
-      const sftpId = await openSftp(credentials);
-      sftpRef.current = sftpId;
-      const homeResult = await getSftpHomeDir(sftpId);
-      const homeDir = homeResult?.homeDir?.trim() || "/";
+      const homeDir = sideIsLocal(side)
+        ? await (async () => {
+          const bridge = netcattyBridge.get();
+          if (!bridge?.getHomeDir) throw new Error("Local filesystem bridge unavailable");
+          return (await bridge.getHomeDir()) || "/";
+        })()
+        : await (async () => {
+          const current = credsRef.current;
+          const credentials = buildSftpHostCredentials({
+            host,
+            hosts: current.hosts,
+            keys: current.keys,
+            identities: current.identities,
+            knownHosts: current.knownHosts,
+            terminalSettings: current.terminalSettings,
+          });
+          const sftpId = await openSftp(credentials);
+          sftpRef.current = sftpId;
+          return (await getSftpHomeDir(sftpId))?.homeDir?.trim() || "/";
+        })();
       const startPath = resolveDataRelayViewerStart(initialPath, homeDir).listPath;
       setPane((current) => ({ ...current, connecting: false, ready: true, homeDir, path: startPath }));
-      await listPane(side, sftpId, startPath);
+      await listPane(side, startPath);
     } catch (err) {
       setPane((current) => ({
         ...current,
@@ -242,7 +274,7 @@ export function useDataRelayCompareSession({
       }));
       throw err;
     }
-  }, [getSftpHomeDir, listPane, openSftp]);
+  }, [getSftpHomeDir, listPane, openSftp, sideIsLocal]);
 
   const sourceHostId = sourceHost?.id;
   const destHostId = destHost?.id;
@@ -300,8 +332,7 @@ export function useDataRelayCompareSession({
   ]);
 
   const navigate = useCallback(async (side: DataRelayCompareSide, path: string) => {
-    const sftpId = side === "left" ? leftSftpRef.current : rightSftpRef.current;
-    if (!sftpId) return;
+    if (!sideIsLocal(side) && !sideSftpId(side)) return;
     compareGenRef.current += 1;
     setSelectedName(null);
     setCompared(false);
@@ -309,39 +340,46 @@ export function useDataRelayCompareSession({
     setCompareProgress(null);
     setRows([]);
     setSummary({ same: 0, leftOnly: 0, rightOnly: 0, different: 0 });
-    await listPane(side, sftpId, path);
-  }, [listPane]);
+    await listPane(side, path);
+  }, [listPane, sideIsLocal, sideSftpId]);
 
   const refreshBoth = useCallback(async (): Promise<{
     leftFiles: DataRelayCompareFile[];
     rightFiles: DataRelayCompareFile[];
   }> => {
-    const leftId = leftSftpRef.current;
-    const rightId = rightSftpRef.current;
     const [leftFiles, rightFiles] = await Promise.all([
-      leftId ? listPane("left", leftId, left.path) : Promise.resolve(null),
-      rightId ? listPane("right", rightId, right.path) : Promise.resolve(null),
+      (leftRef.current.ready && (sideIsLocal("left") || leftSftpRef.current))
+        ? listPane("left", left.path)
+        : Promise.resolve(null),
+      (rightRef.current.ready && (sideIsLocal("right") || rightSftpRef.current))
+        ? listPane("right", right.path)
+        : Promise.resolve(null),
     ]);
     return {
       leftFiles: leftFiles ?? left.files,
       rightFiles: rightFiles ?? right.files,
     };
-  }, [left.files, left.path, listPane, right.files, right.path]);
+  }, [left.files, left.path, listPane, right.files, right.path, sideIsLocal]);
 
-  const listTreePath = useCallback(async (sftpId: string, path: string): Promise<DataRelayCompareFile[]> => {
-    const raw = await listSftp(sftpId, path);
+  const listTreePath = useCallback(async (side: DataRelayCompareSide, path: string): Promise<DataRelayCompareFile[]> => {
+    const raw = sideIsLocal(side)
+      ? await (async () => {
+        const bridge = netcattyBridge.get();
+        if (!bridge?.listLocalDir) throw new Error("Local filesystem bridge unavailable");
+        return bridge.listLocalDir(path);
+      })()
+      : await listSftp(requireSideSftpId(side), path);
     const files: DataRelayCompareFile[] = [];
     for (const file of raw ?? []) {
       const mapped = toCompareFile(file);
       if (mapped) files.push(mapped);
     }
     return files;
-  }, [listSftp]);
+  }, [listSftp, requireSideSftpId, sideIsLocal]);
 
   const runCompare = useCallback(async (): Promise<DataRelayCompareRow[] | null> => {
-    const leftId = leftSftpRef.current;
-    const rightId = rightSftpRef.current;
-    if (!leftId || !rightId) return null;
+    if (!sideIsLocal("left") && !leftSftpRef.current) return null;
+    if (!sideIsLocal("right") && !rightSftpRef.current) return null;
     const gen = ++compareGenRef.current;
     setComparing(true);
     setCompareProgress({ scanned: 0, diffs: 0, same: 0 });
@@ -356,7 +394,7 @@ export function useDataRelayCompareSession({
       const result = await compareDataRelayTreesPaired(
         leftPath,
         rightPath,
-        (side, path) => listTreePath(side === "left" ? leftId : rightId, path),
+        (side, path) => listTreePath(side, path),
         {
           joinAbsolute: joinPath,
           cancelled: () => gen !== compareGenRef.current,
@@ -399,7 +437,7 @@ export function useDataRelayCompareSession({
     } finally {
       if (gen === compareGenRef.current) setComparing(false);
     }
-  }, [appendLog, listTreePath, refreshBoth, rule.destPath, rule.sourcePath]);
+  }, [appendLog, listTreePath, refreshBoth, rule.destPath, rule.sourcePath, sideIsLocal]);
 
   const cancelCompare = useCallback(() => {
     compareGenRef.current += 1;
@@ -422,13 +460,28 @@ export function useDataRelayCompareSession({
     paths: ReadonlySet<string> | undefined,
     progress: { done: number; total: number },
   ): Promise<string[]> => {
-    const sourceSftpId = direction === "left-to-right" ? leftSftpRef.current : rightSftpRef.current;
-    const targetSftpId = direction === "left-to-right" ? rightSftpRef.current : leftSftpRef.current;
+    const sourceSide = direction === "left-to-right" ? "left" : "right";
+    const targetSide = direction === "left-to-right" ? "right" : "left";
+    const sourceSftpId = sideSftpId(sourceSide);
+    const targetSftpId = sideSftpId(targetSide);
+    const sourceIsLocal = sideIsLocal(sourceSide);
+    const targetIsLocal = sideIsLocal(targetSide);
     const sourceHostId = direction === "left-to-right" ? rule.sourceHostId : rule.destHostId;
     const targetHostId = direction === "left-to-right" ? rule.destHostId : rule.sourceHostId;
     const leftReady = leftRef.current.ready;
     const rightReady = rightRef.current.ready;
-    if (!sourceSftpId || !targetSftpId || !leftReady || !rightReady) return [];
+    if (!leftReady || !rightReady) return [];
+    if (!sourceIsLocal && !sourceSftpId) return [];
+    if (!targetIsLocal && !targetSftpId) return [];
+    const mkdirOnSide = async (path: string) => {
+      if (targetIsLocal) {
+        const bridge = netcattyBridge.get();
+        if (!bridge?.mkdirLocal) throw new Error("Local filesystem bridge unavailable");
+        await bridge.mkdirLocal(path);
+        return;
+      }
+      await mkdirSftp(targetSftpId!, path);
+    };
     // Sync scope is locked to the rule's configured roots — never to wherever
     // the panes happen to be browsed.
     const leftRoot = resolveDataRelayViewerStart(rule.sourcePath, leftRef.current.homeDir || "/").listPath;
@@ -444,7 +497,7 @@ export function useDataRelayCompareSession({
     const copied: string[] = [];
     for (const item of items) {
       if (item.type === "directory") {
-        await mkdirSftp(targetSftpId, joinTransferTargetPath(targetBase, item.relativePath));
+        await mkdirOnSide(joinTransferTargetPath(targetBase, item.relativePath));
         copied.push(item.relativePath);
         progress.done += 1;
         setCopyProgress({ ...progress });
@@ -452,7 +505,7 @@ export function useDataRelayCompareSession({
       }
       const parentRel = parentDataRelayRelativePath(item.relativePath);
       if (parentRel) {
-        await mkdirSftp(targetSftpId, joinTransferTargetPath(targetBase, parentRel));
+        await mkdirOnSide(joinTransferTargetPath(targetBase, parentRel));
       }
       const sourcePath = joinTransferTargetPath(sourceBase, item.relativePath);
       const targetPath = joinTransferTargetPath(targetBase, item.relativePath);
@@ -460,10 +513,10 @@ export function useDataRelayCompareSession({
         transferId: `relay-compare-${Date.now()}-${item.relativePath}`,
         sourcePath,
         targetPath,
-        sourceType: "sftp",
-        targetType: "sftp",
-        sourceSftpId,
-        targetSftpId,
+        sourceType: sourceIsLocal ? "local" : "sftp",
+        targetType: targetIsLocal ? "local" : "sftp",
+        ...(sourceSftpId ? { sourceSftpId } : {}),
+        ...(targetSftpId ? { targetSftpId } : {}),
         sourceHostId,
         targetHostId,
         totalBytes: item.file.size,
@@ -481,7 +534,17 @@ export function useDataRelayCompareSession({
       }
     }
     return copied;
-  }, [appendLog, mkdirSftp, rule.destHostId, rule.destPath, rule.sourceHostId, rule.sourcePath, startStreamTransfer]);
+  }, [
+    appendLog,
+    mkdirSftp,
+    rule.destHostId,
+    rule.destPath,
+    rule.sourceHostId,
+    rule.sourcePath,
+    sideIsLocal,
+    sideSftpId,
+    startStreamTransfer,
+  ]);
 
   const copySelection = useCallback(async (
     direction: DataRelayCompareSyncDirection,
@@ -563,14 +626,28 @@ export function useDataRelayCompareSession({
   const uploadSubdirectory = useCallback(async (
     name: string,
   ): Promise<{ copied: number; failed: number } | null> => {
-    const leftSftpId = leftSftpRef.current;
-    const rightSftpId = rightSftpRef.current;
-    if (!leftSftpId || !rightSftpId || !leftRef.current.ready || !rightRef.current.ready) return null;
+    const leftSftpId = sideSftpId("left");
+    const rightSftpId = sideSftpId("right");
+    const sourceIsLocal = sideIsLocal("left");
+    const targetIsLocal = sideIsLocal("right");
+    if (!leftRef.current.ready || !rightRef.current.ready) return null;
+    if (!sourceIsLocal && !leftSftpId) return null;
+    if (!targetIsLocal && !rightSftpId) return null;
     const leftRoot = resolveDataRelayViewerStart(rule.sourcePath, leftRef.current.homeDir || "/").listPath;
     const rightRoot = resolveDataRelayViewerStart(rule.destPath, rightRef.current.homeDir || "/").listPath;
     const relDir = dataRelaySubdirUploadRelativeDir(leftRoot, leftRef.current.path, name);
     const sourceDir = joinTransferTargetPath(leftRoot, relDir);
     const targetDir = joinTransferTargetPath(rightRoot, relDir);
+    const transferDirection = sourceIsLocal ? "upload" : targetIsLocal ? "download" : "remote-to-remote";
+    const mkdirOnTarget = async (path: string) => {
+      if (targetIsLocal) {
+        const bridge = netcattyBridge.get();
+        if (!bridge?.mkdirLocal) throw new Error("Local filesystem bridge unavailable");
+        await bridge.mkdirLocal(path);
+        return;
+      }
+      await mkdirSftp(rightSftpId!, path);
+    };
 
     const gen = ++uploadGenRef.current;
     const cancelled = () => uploadGenRef.current !== gen;
@@ -579,7 +656,7 @@ export function useDataRelayCompareSession({
     try {
       const tree = await collectDataRelayCompareTree(
         sourceDir,
-        (path) => listTreePath(leftSftpId, path),
+        (path) => listTreePath("left", path),
         { joinAbsolute: joinPath, cancelled },
       );
       if (cancelled()) return null;
@@ -590,11 +667,11 @@ export function useDataRelayCompareSession({
       });
       let copied = 0;
       let failed = 0;
-      try { await mkdirSftp(rightSftpId, targetDir); } catch { /* may already exist */ }
+      try { await mkdirOnTarget(targetDir); } catch { /* may already exist */ }
       for (const entry of entries) {
         if (cancelled()) return null;
         if (isDataRelayCompareDirectory(entry)) {
-          try { await mkdirSftp(rightSftpId, joinTransferTargetPath(targetDir, entry.relativePath)); } catch { /* may already exist */ }
+          try { await mkdirOnTarget(joinTransferTargetPath(targetDir, entry.relativePath)); } catch { /* may already exist */ }
           continue;
         }
         if (entry.type === "symlink" && entry.linkTarget !== "file") continue;
@@ -606,13 +683,13 @@ export function useDataRelayCompareSession({
           fileName: getDataRelayFileName(entry.relativePath),
           sourcePath: sourceAbs,
           targetPath: targetAbs,
-          sourceConnectionId: leftSftpId,
-          targetConnectionId: rightSftpId,
+          sourceConnectionId: leftSftpId ?? "local",
+          targetConnectionId: rightSftpId ?? "local",
           sourceHostId: rule.sourceHostId,
           targetHostId: rule.destHostId,
-          sourceHostLabel: sourceHost?.label,
-          targetHostLabel: destHost?.label,
-          direction: "remote-to-remote",
+          sourceHostLabel: sourceIsLocal ? "Local" : sourceHost?.label,
+          targetHostLabel: targetIsLocal ? "Local" : destHost?.label,
+          direction: transferDirection,
           status: "queued",
           totalBytes: entry.size,
           transferredBytes: 0,
@@ -627,10 +704,10 @@ export function useDataRelayCompareSession({
             transferId,
             sourcePath: sourceAbs,
             targetPath: targetAbs,
-            sourceType: "sftp",
-            targetType: "sftp",
-            sourceSftpId: leftSftpId,
-            targetSftpId: rightSftpId,
+            sourceType: sourceIsLocal ? "local" : "sftp",
+            targetType: targetIsLocal ? "local" : "sftp",
+            ...(leftSftpId ? { sourceSftpId: leftSftpId } : {}),
+            ...(rightSftpId ? { targetSftpId: rightSftpId } : {}),
             sourceHostId: rule.sourceHostId,
             targetHostId: rule.destHostId,
             totalBytes: entry.size,
@@ -687,6 +764,8 @@ export function useDataRelayCompareSession({
     rule.id,
     rule.sourceHostId,
     rule.sourcePath,
+    sideIsLocal,
+    sideSftpId,
     sourceHost,
     startStreamTransfer,
   ]);
@@ -713,15 +792,22 @@ export function useDataRelayCompareSession({
     if (!isSafeNewFolderName(trimmed)) {
       throw new Error("Invalid folder name");
     }
-    const sftpId = side === "left" ? leftSftpRef.current : rightSftpRef.current;
+    const local = sideIsLocal(side);
+    const sftpId = local ? null : sideSftpId(side);
     const pane = side === "left" ? leftRef.current : rightRef.current;
-    if (!sftpId || !pane.ready) {
+    if ((!local && !sftpId) || !pane.ready) {
       throw new Error("SFTP session not ready");
     }
     const fullPath = joinPath(pane.path, trimmed);
     try {
-      await mkdirSftp(sftpId, fullPath);
-      await listPane(side, sftpId, pane.path);
+      if (local) {
+        const bridge = netcattyBridge.get();
+        if (!bridge?.mkdirLocal) throw new Error("Local filesystem bridge unavailable");
+        await bridge.mkdirLocal(fullPath);
+      } else {
+        await mkdirSftp(sftpId!, fullPath);
+      }
+      await listPane(side, pane.path);
       setSelectedName(trimmed);
       appendLog(`Created ${fullPath}`, "success");
     } catch (err) {
@@ -729,26 +815,33 @@ export function useDataRelayCompareSession({
       appendLog(message, "error");
       throw err;
     }
-  }, [appendLog, listPane, mkdirSftp]);
+  }, [appendLog, listPane, mkdirSftp, sideIsLocal, sideSftpId]);
 
   const createFile = useCallback(async (side: DataRelayCompareSide, name: string) => {
     const trimmed = name.trim();
     if (!isSafeNewFolderName(trimmed)) {
       throw new Error("Invalid file name");
     }
-    const sftpId = side === "left" ? leftSftpRef.current : rightSftpRef.current;
+    const local = sideIsLocal(side);
+    const sftpId = local ? null : sideSftpId(side);
     const pane = side === "left" ? leftRef.current : rightRef.current;
-    if (!sftpId || !pane.ready) {
+    if ((!local && !sftpId) || !pane.ready) {
       throw new Error("SFTP session not ready");
     }
     const fullPath = joinPath(pane.path, trimmed);
     try {
-      try {
-        await writeSftpBinary(sftpId, fullPath, new ArrayBuffer(0));
-      } catch {
-        await writeSftp(sftpId, fullPath, "");
+      if (local) {
+        const bridge = netcattyBridge.get();
+        if (!bridge?.writeLocalFile) throw new Error("Local filesystem bridge unavailable");
+        await bridge.writeLocalFile(fullPath, new ArrayBuffer(0));
+      } else {
+        try {
+          await writeSftpBinary(sftpId!, fullPath, new ArrayBuffer(0));
+        } catch {
+          await writeSftp(sftpId!, fullPath, "");
+        }
       }
-      await listPane(side, sftpId, pane.path);
+      await listPane(side, pane.path);
       setSelectedName(trimmed);
       appendLog(`Created ${fullPath}`, "success");
     } catch (err) {
@@ -756,7 +849,7 @@ export function useDataRelayCompareSession({
       appendLog(message, "error");
       throw err;
     }
-  }, [appendLog, listPane, writeSftp, writeSftpBinary]);
+  }, [appendLog, listPane, sideIsLocal, sideSftpId, writeSftp, writeSftpBinary]);
 
   const copyEntries = useCallback((side: DataRelayCompareSide, files: DataRelayCompareFile[]) => {
     const pane = side === "left" ? leftRef.current : rightRef.current;
@@ -815,7 +908,7 @@ export function useDataRelayCompareSession({
         mkdir: mkdirSftp,
         transfer: startStreamTransfer,
       });
-      await listPane(side, destSftpId, destPane.path);
+      await listPane(side, destPane.path);
       if (result.skipped.length > 0 && result.copied.length === 0 && result.failed.length === 0) {
         throw new Error("same-path");
       }
@@ -841,18 +934,27 @@ export function useDataRelayCompareSession({
   const deleteEntries = useCallback(async (side: DataRelayCompareSide, files: DataRelayCompareFile[]) => {
     const names = files.map((file) => file.name).filter(isSafeNewFolderName);
     if (names.length === 0) return { deleted: [] as string[], failed: [] as string[] };
-    const sftpId = side === "left" ? leftSftpRef.current : rightSftpRef.current;
+    const local = sideIsLocal(side);
+    const sftpId = local ? null : sideSftpId(side);
     const pane = side === "left" ? leftRef.current : rightRef.current;
-    if (!sftpId || !pane.ready) {
+    if ((!local && !sftpId) || !pane.ready) {
       throw new Error("SFTP session not ready");
     }
 
     const deleted: string[] = [];
     const failed: string[] = [];
-    for (const name of names) {
+    for (const file of files) {
+      if (!isSafeNewFolderName(file.name)) continue;
+      const name = file.name;
       const fullPath = joinPath(pane.path, name);
       try {
-        await deleteSftp(sftpId, fullPath);
+        if (local) {
+          const bridge = netcattyBridge.get();
+          if (!bridge?.deleteLocalFile) throw new Error("Local filesystem bridge unavailable");
+          await bridge.deleteLocalFile(fullPath, isDir(file) ? "directory" : "file");
+        } else {
+          await deleteSftp(sftpId!, fullPath);
+        }
         deleted.push(name);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -860,7 +962,7 @@ export function useDataRelayCompareSession({
         appendLog(`Delete failed: ${fullPath}: ${message}`, "error");
       }
     }
-    await listPane(side, sftpId, pane.path);
+    await listPane(side, pane.path);
     setSelectedName((current) => (current && names.includes(current) ? null : current));
     if (deleted.length > 0) {
       appendLog(`Deleted ${deleted.length} item(s)`, "success");
@@ -869,7 +971,7 @@ export function useDataRelayCompareSession({
       throw new Error(failed[0] || "Delete failed");
     }
     return { deleted, failed };
-  }, [appendLog, deleteSftp, listPane]);
+  }, [appendLog, deleteSftp, listPane, sideIsLocal, sideSftpId]);
 
   return {
     left,

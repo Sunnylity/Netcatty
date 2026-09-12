@@ -8,6 +8,7 @@ import {
   type UseDataRelayStateOptions,
 } from '../application/state/useDataRelayState';
 import { DataRelayRule, Host, Identity, KnownHost, SSHKey } from '../domain/models';
+import { dataRelayLocalPseudoHost, isDataRelayLocalHostId } from '../domain/dataRelayLocal';
 import { cn } from '../lib/utils';
 import { RuleCard, RuleFormPanel } from './data-relay';
 import { Button } from './ui/button';
@@ -69,13 +70,21 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
     for (const host of hosts) map.set(host.id, host);
     return map;
   }, [hosts]);
+  const localHost = useMemo(
+    () => dataRelayLocalPseudoHost(t('dataRelay.localHost')),
+    [t],
+  );
+  const hostById = useCallback((hostId: string | undefined): Host | undefined => {
+    if (isDataRelayLocalHostId(hostId)) return localHost;
+    return hostId ? hostsById.get(hostId) : undefined;
+  }, [hostsById, localHost]);
 
   const filteredRules = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     if (!keyword) return rules;
     return rules.filter((rule) => {
-      const source = hostsById.get(rule.sourceHostId);
-      const dest = hostsById.get(rule.destHostId);
+      const source = hostById(rule.sourceHostId);
+      const dest = hostById(rule.destHostId);
       return [
         rule.label,
         rule.sourcePath,
@@ -89,7 +98,7 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(keyword));
     });
-  }, [rules, search, hostsById]);
+  }, [hostById, rules, search]);
 
   const openNewPanel = useCallback(() => {
     setDraft({ writeMode: 'overwrite', autoStart: false });
@@ -244,8 +253,8 @@ const DataRelayNew: React.FC<DataRelayNewProps> = ({
               <RuleCard
                 key={rule.id}
                 rule={rule}
-                sourceHost={hostsById.get(rule.sourceHostId)}
-                destHost={hostsById.get(rule.destHostId)}
+                sourceHost={hostById(rule.sourceHostId)}
+                destHost={hostById(rule.destHostId)}
                 onStart={() => void handleStart(rule.id)}
                 onStop={() => void handleStop(rule.id)}
                 onEdit={() => openEditPanel(rule)}

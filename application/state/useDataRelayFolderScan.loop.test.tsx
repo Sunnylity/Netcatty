@@ -32,7 +32,7 @@ const toRemoteFiles = (fs: FakeFs, dir: string): RemoteFile[] => {
       type: "file",
       size: file.size,
       lastModified: new Date(file.mtime).toISOString(),
-    } as RemoteFile);
+    } as unknown as RemoteFile);
   }
   return files;
 };
@@ -71,7 +71,7 @@ function installFakeBridge() {
     },
   };
   const globalScope = globalThis as typeof globalThis & { window?: unknown };
-  globalScope.window = { netcatty: bridge, ...(globalScope.window as object | undefined) };
+  globalScope.window = { netcatty: bridge } as unknown as NonNullable<typeof globalScope.window>;
   const store = new Map<string, string>();
   (globalScope as typeof globalThis & { localStorage?: unknown }).localStorage = {
     getItem: (key: string) => store.get(key) ?? null,

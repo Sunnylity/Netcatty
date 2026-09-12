@@ -749,6 +749,7 @@ export const zhTWCoreMessages: Messages = {
   'dataRelay.context.uploadDirTarget': '目標',
   'dataRelay.context.uploadDirDone': '已上傳 {count} 個檔案',
   'dataRelay.context.uploadDirFailed': '{count} 個檔案上傳失敗',
+  'dataRelay.localHost': '本機',
   'vault.nav.snippets': '程式碼片段',
   'vault.nav.notes': '筆記',
   'vault.nav.knownHosts': '已知主機',

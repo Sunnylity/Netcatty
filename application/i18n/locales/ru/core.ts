@@ -1093,6 +1093,7 @@ export const ruCoreMessages: Messages = {
   'dataRelay.context.uploadDirTarget': 'Назначение',
   'dataRelay.context.uploadDirDone': 'Отправлено файлов: {count}',
   'dataRelay.context.uploadDirFailed': 'Не удалось отправить файлов: {count}',
+  'dataRelay.localHost': 'Этот компьютер',
   'vault.nav.snippets': 'Сниппеты',
   'vault.nav.notes': 'Заметки',
   'vault.nav.knownHosts': 'Известные хосты',

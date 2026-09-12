@@ -33,6 +33,7 @@ import {
 } from "../../application/state/sftp/utils";
 import type { DataRelayCompareFile, DataRelayCompareKind } from "../../domain/dataRelayCompare";
 import { resolveDataRelayViewerStart } from "../../domain/dataRelayPaths";
+import { isDataRelayLocalHostId } from "../../domain/dataRelayLocal";
 import type { DataRelayRule, Host, Identity, KnownHost, SSHKey, TerminalSettings } from "../../domain/models";
 import { cn } from "../../lib/utils";
 import { SftpBreadcrumb } from "../sftp/SftpBreadcrumb";
@@ -125,8 +126,8 @@ const ComparePane: React.FC<{
   onNewFolder: () => void;
   onNewFile: () => void;
   onCopyPath: (file?: DataRelayCompareFile) => void;
-  onCopy: (file: DataRelayCompareFile) => void;
-  onPaste: () => void;
+  onCopy?: (file: DataRelayCompareFile) => void;
+  onPaste?: () => void;
   onDelete: (file: DataRelayCompareFile) => void;
   onOpenTerminal?: (file?: DataRelayCompareFile) => void;
   /** Source pane only: push one subdirectory to the destination (overwrite). */
@@ -374,6 +375,10 @@ export const CompareView: React.FC<CompareViewProps> = ({
   const logDragRef = useRef<{ startY: number; startHeight: number } | null>(null);
   logHeightRef.current = logHeight;
   const running = isRelayRuleRunning(rule);
+  // Local panes browse the local machine: relay clipboard copy/paste and
+  // open-in-terminal are SFTP-only surfaces.
+  const sourceIsLocal = isDataRelayLocalHostId(rule.sourceHostId);
+  const destIsLocal = isDataRelayLocalHostId(rule.destHostId);
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -623,10 +628,10 @@ export const CompareView: React.FC<CompareViewProps> = ({
           onNewFolder={() => openNameDialog("left", "folder")}
           onNewFile={() => openNameDialog("left", "file")}
           onCopyPath={(file) => handleCopyPath("left", file)}
-          onCopy={(file) => handleCopy("left", file)}
-          onPaste={() => void handlePaste("left")}
+          onCopy={sourceIsLocal ? undefined : (file) => handleCopy("left", file)}
+          onPaste={sourceIsLocal ? undefined : () => void handlePaste("left")}
           onDelete={(file) => setDeleteTarget({ side: "left", file })}
-          onOpenTerminal={onOpenTerminalAtPath ? (file) => handleOpenTerminal("left", file) : undefined}
+          onOpenTerminal={onOpenTerminalAtPath && !sourceIsLocal ? (file) => handleOpenTerminal("left", file) : undefined}
           onUploadDir={setUploadTarget}
         />
         <div className="hidden w-6 shrink-0 items-center justify-center md:flex">
@@ -650,10 +655,10 @@ export const CompareView: React.FC<CompareViewProps> = ({
           onNewFolder={() => openNameDialog("right", "folder")}
           onNewFile={() => openNameDialog("right", "file")}
           onCopyPath={(file) => handleCopyPath("right", file)}
-          onCopy={(file) => handleCopy("right", file)}
-          onPaste={() => void handlePaste("right")}
+          onCopy={destIsLocal ? undefined : (file) => handleCopy("right", file)}
+          onPaste={destIsLocal ? undefined : () => void handlePaste("right")}
           onDelete={(file) => setDeleteTarget({ side: "right", file })}
-          onOpenTerminal={onOpenTerminalAtPath ? (file) => handleOpenTerminal("right", file) : undefined}
+          onOpenTerminal={onOpenTerminalAtPath && !destIsLocal ? (file) => handleOpenTerminal("right", file) : undefined}
         />
       </div>
 

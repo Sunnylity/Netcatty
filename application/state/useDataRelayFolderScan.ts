@@ -30,6 +30,8 @@ import { isWindowsPath, isWindowsRoot, joinPath, joinTransferTargetPath } from "
 import { sftpTransferCenterStore } from "./sftpTransferCenterStore";
 import { buildSftpHostCredentials } from "./sftp/useSftpHostCredentials";
 import { useSftpBackend } from "./useSftpBackend";
+import { netcattyBridge } from "../../infrastructure/services/netcattyBridge";
+import { resolveDataRelayEndpoint } from "../../domain/dataRelayLocal";
 
 interface FolderScanSession {
   cancelled: boolean;
@@ -143,8 +145,14 @@ export function useDataRelayFolderScan({
     await Promise.all(ruleIds.map((ruleId) => stopScan(ruleId)));
   }, [stopScan]);
 
-  const listDirectory = useCallback(async (sftpId: string, path: string): Promise<DataRelayCompareFile[]> => {
-    const raw = await listSftp(sftpId, path);
+  const listDirectory = useCallback(async (sftpId: string | null, path: string): Promise<DataRelayCompareFile[]> => {
+    const raw = sftpId
+      ? await listSftp(sftpId, path)
+      : await (async () => {
+        const bridge = netcattyBridge.get();
+        if (!bridge?.listLocalDir) throw new Error("Local filesystem bridge unavailable");
+        return bridge.listLocalDir(path);
+      })();
     const files: DataRelayCompareFile[] = [];
     for (const file of raw ?? []) {
       const mapped = toCompareFile(file);
@@ -153,23 +161,47 @@ export function useDataRelayFolderScan({
     return files;
   }, [listSftp]);
 
+  const getSideHomeDir = useCallback(async (sftpId: string | null): Promise<string> => {
+    if (!sftpId) {
+      const bridge = netcattyBridge.get();
+      if (!bridge?.getHomeDir) throw new Error("Local filesystem bridge unavailable");
+      return (await bridge.getHomeDir()) || "/";
+    }
+    return (await getSftpHomeDir(sftpId))?.homeDir?.trim() || "/";
+  }, [getSftpHomeDir]);
+
+  const mkdirOnSide = useCallback(async (sftpId: string | null, path: string): Promise<void> => {
+    if (!sftpId) {
+      const bridge = netcattyBridge.get();
+      if (!bridge?.mkdirLocal) throw new Error("Local filesystem bridge unavailable");
+      await bridge.mkdirLocal(path);
+      return;
+    }
+    await mkdirSftp(sftpId, path);
+  }, [mkdirSftp]);
+
   const runPass = useCallback(async (rule: DataRelayRule, session: FolderScanSession) => {
+    // A null sftp id marks the local-machine endpoint of the relay.
     const sourceSftpId = session.sourceSftpId;
     const destSftpId = session.destSftpId;
-    if (!sourceSftpId || !destSftpId) return;
 
     const creds = credsRef.current;
-    const sourceHost = creds.hosts.find((host) => host.id === rule.sourceHostId);
-    const destHost = creds.hosts.find((host) => host.id === rule.destHostId);
-    if (!sourceHost || !destHost) throw new Error("Relay hosts were not found.");
+    const sourceEndpoint = resolveDataRelayEndpoint(rule.sourceHostId, creds.hosts);
+    const destEndpoint = resolveDataRelayEndpoint(rule.destHostId, creds.hosts);
+    if (!sourceEndpoint || !destEndpoint) throw new Error("Relay hosts were not found.");
+    const transferDirection = sourceEndpoint.isLocal
+      ? "upload"
+      : destEndpoint.isLocal
+        ? "download"
+        : "remote-to-remote";
 
     const [sourceHome, destHome] = await Promise.all([
-      getSftpHomeDir(sourceSftpId),
-      getSftpHomeDir(destSftpId),
+      getSideHomeDir(sourceSftpId),
+      getSideHomeDir(destSftpId),
     ]);
     if (session.cancelled) return;
-    const sourcePath = resolveDataRelayViewerStart(rule.sourcePath, sourceHome?.homeDir?.trim() || "/").listPath;
-    const destPath = resolveDataRelayViewerStart(rule.destPath, destHome?.homeDir?.trim() || "/").listPath;
+    const sourcePath = resolveDataRelayViewerStart(rule.sourcePath, sourceHome).listPath;
+    const destPath = resolveDataRelayViewerStart(rule.destPath, destHome).listPath;
     const caseInsensitive = usesWindowsDataRelayPath(sourcePath) || usesWindowsDataRelayPath(destPath);
     const mode = normalizeDataRelayScanMode(rule.scanMode);
     const joinAbsolute = joinPath;
@@ -183,7 +215,7 @@ export function useDataRelayFolderScan({
       const destIsRoot = destPath === "/" || (isWindowsPath(destPath) && isWindowsRoot(destPath));
       if (!destIsRoot) {
         try {
-          await mkdirSftp(destSftpId, destPath);
+          await mkdirOnSide(destSftpId, destPath);
         } catch {
           // Destination folder may already exist.
         }
@@ -240,7 +272,7 @@ export function useDataRelayFolderScan({
       try {
         if (item.type === "directory") {
           try {
-            await mkdirSftp(destSftpId, joinTransferTargetPath(destPath, item.relativePath));
+            await mkdirOnSide(destSftpId, joinTransferTargetPath(destPath, item.relativePath));
           } catch {
             // Directory may already exist on the destination.
           }
@@ -250,7 +282,7 @@ export function useDataRelayFolderScan({
         const parentRel = parentDataRelayRelativePath(item.relativePath);
         if (parentRel) {
           try {
-            await mkdirSftp(destSftpId, joinTransferTargetPath(destPath, parentRel));
+            await mkdirOnSide(destSftpId, joinTransferTargetPath(destPath, parentRel));
           } catch {
             // Parent directory may already exist on the destination.
           }
@@ -267,13 +299,13 @@ export function useDataRelayFolderScan({
           fileName: getDataRelayFileName(item.relativePath),
           sourcePath: sourceAbsPath,
           targetPath: targetAbsPath,
-          sourceConnectionId: sourceSftpId,
-          targetConnectionId: destSftpId,
+          sourceConnectionId: sourceSftpId ?? "local",
+          targetConnectionId: destSftpId ?? "local",
           sourceHostId: rule.sourceHostId,
           targetHostId: rule.destHostId,
-          sourceHostLabel: sourceHost.label,
-          targetHostLabel: destHost.label,
-          direction: "remote-to-remote",
+          sourceHostLabel: sourceEndpoint.isLocal ? "Local" : sourceEndpoint.host.label,
+          targetHostLabel: destEndpoint.isLocal ? "Local" : destEndpoint.host.label,
+          direction: transferDirection,
           status: "queued",
           totalBytes: item.file.size,
           transferredBytes: 0,
@@ -287,10 +319,10 @@ export function useDataRelayFolderScan({
           transferId,
           sourcePath: sourceAbsPath,
           targetPath: targetAbsPath,
-          sourceType: "sftp",
-          targetType: "sftp",
-          sourceSftpId,
-          targetSftpId: destSftpId,
+          sourceType: sourceEndpoint.isLocal ? "local" : "sftp",
+          targetType: destEndpoint.isLocal ? "local" : "sftp",
+          ...(sourceSftpId ? { sourceSftpId } : {}),
+          ...(destSftpId ? { targetSftpId: destSftpId } : {}),
           sourceHostId: rule.sourceHostId,
           targetHostId: rule.destHostId,
           totalBytes: item.file.size,
@@ -335,7 +367,7 @@ export function useDataRelayFolderScan({
       seedAll,
     }));
     return { copied: copiedPaths.size, failed: failedPaths.size };
-  }, [getSftpHomeDir, listDirectory, mkdirSftp, startStreamTransfer]);
+  }, [getSideHomeDir, listDirectory, mkdirOnSide, startStreamTransfer]);
 
   const startScan = useCallback(async (ruleId: string): Promise<{ success: boolean; error?: string }> => {
     const existing = sessionsRef.current.get(ruleId);
@@ -348,10 +380,13 @@ export function useDataRelayFolderScan({
     }
 
     const creds = credsRef.current;
-    const sourceHost = creds.hosts.find((host) => host.id === rule.sourceHostId);
-    const destHost = creds.hosts.find((host) => host.id === rule.destHostId);
-    if (!sourceHost) return { success: false, error: `Source host "${rule.sourceHostId}" was not found.` };
-    if (!destHost) return { success: false, error: `Destination host "${rule.destHostId}" was not found.` };
+    const sourceEndpoint = resolveDataRelayEndpoint(rule.sourceHostId, creds.hosts);
+    const destEndpoint = resolveDataRelayEndpoint(rule.destHostId, creds.hosts);
+    if (!sourceEndpoint) return { success: false, error: `Source host "${rule.sourceHostId}" was not found.` };
+    if (!destEndpoint) return { success: false, error: `Destination host "${rule.destHostId}" was not found.` };
+    if (sourceEndpoint.isLocal && destEndpoint.isLocal) {
+      return { success: false, error: "A data relay needs at least one remote host." };
+    }
 
     const session: FolderScanSession = {
       cancelled: false,
@@ -364,26 +399,30 @@ export function useDataRelayFolderScan({
     onStatusRef.current(ruleId, "connecting");
 
     try {
-      const sourceSftpId = await openSftp(buildSftpHostCredentials({
-        host: sourceHost,
-        hosts: creds.hosts,
-        keys: creds.keys,
-        identities: creds.identities,
-        knownHosts: creds.knownHosts,
-        terminalSettings: creds.terminalSettings,
-      }));
-      session.sourceSftpId = sourceSftpId;
-      if (session.cancelled) return { success: false };
-      const destSftpId = await openSftp(buildSftpHostCredentials({
-        host: destHost,
-        hosts: creds.hosts,
-        keys: creds.keys,
-        identities: creds.identities,
-        knownHosts: creds.knownHosts,
-        terminalSettings: creds.terminalSettings,
-      }));
-      session.destSftpId = destSftpId;
-      if (session.cancelled) return { success: false };
+      if (!sourceEndpoint.isLocal) {
+        const sourceSftpId = await openSftp(buildSftpHostCredentials({
+          host: sourceEndpoint.host,
+          hosts: creds.hosts,
+          keys: creds.keys,
+          identities: creds.identities,
+          knownHosts: creds.knownHosts,
+          terminalSettings: creds.terminalSettings,
+        }));
+        session.sourceSftpId = sourceSftpId;
+        if (session.cancelled) return { success: false };
+      }
+      if (!destEndpoint.isLocal) {
+        const destSftpId = await openSftp(buildSftpHostCredentials({
+          host: destEndpoint.host,
+          hosts: creds.hosts,
+          keys: creds.keys,
+          identities: creds.identities,
+          knownHosts: creds.knownHosts,
+          terminalSettings: creds.terminalSettings,
+        }));
+        session.destSftpId = destSftpId;
+        if (session.cancelled) return { success: false };
+      }
       onStatusRef.current(ruleId, "active");
     } catch (err) {
       sessionsRef.current.delete(ruleId);

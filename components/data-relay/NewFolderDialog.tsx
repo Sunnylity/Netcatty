@@ -75,14 +75,18 @@ const PathListContextMenuItems: React.FC<PathListContextActions & { variant: "ro
           <ClipboardCopy size={14} className="mr-2" />
           {t("sftp.context.copyPath")}
         </ContextMenuItem>
-        <ContextMenuItem disabled={disabled || !canCopy} onSelect={() => onCopy?.()}>
-          <Copy size={14} className="mr-2" />
-          {t("action.copy")}
-        </ContextMenuItem>
-        <ContextMenuItem disabled={!canPaste} onSelect={onPaste}>
-          <ClipboardPaste size={14} className="mr-2" />
-          {t("dataRelay.context.paste")}
-        </ContextMenuItem>
+        {onCopy ? (
+          <ContextMenuItem disabled={disabled || !canCopy} onSelect={() => onCopy()}>
+            <Copy size={14} className="mr-2" />
+            {t("action.copy")}
+          </ContextMenuItem>
+        ) : null}
+        {onPaste ? (
+          <ContextMenuItem disabled={!canPaste} onSelect={onPaste}>
+            <ClipboardPaste size={14} className="mr-2" />
+            {t("dataRelay.context.paste")}
+          </ContextMenuItem>
+        ) : null}
         {onUploadDir ? (
           <>
             <ContextMenuSeparator />
@@ -137,10 +141,12 @@ const PathListContextMenuItems: React.FC<PathListContextActions & { variant: "ro
         <FilePlus size={14} className="mr-2" />
         {t("sftp.newFile")}
       </ContextMenuItem>
-      <ContextMenuItem disabled={!canPaste} onSelect={onPaste}>
-        <ClipboardPaste size={14} className="mr-2" />
-        {t("dataRelay.context.paste")}
-      </ContextMenuItem>
+      {onPaste ? (
+        <ContextMenuItem disabled={!canPaste} onSelect={onPaste}>
+          <ClipboardPaste size={14} className="mr-2" />
+          {t("dataRelay.context.paste")}
+        </ContextMenuItem>
+      ) : null}
       <ContextMenuSeparator />
       <ContextMenuItem disabled={disabled} onSelect={onCopyPath}>
         <ClipboardCopy size={14} className="mr-2" />

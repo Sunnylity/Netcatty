@@ -2,6 +2,7 @@ import { Copy, FolderOpen, Trash2 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { useI18n } from '../../application/i18n/I18nProvider';
 import { resolveHostOs } from '../../domain/host';
+import { DATA_RELAY_LOCAL_HOST_ID, isDataRelayLocalHostId } from '../../domain/dataRelayLocal';
 import {
   buildDataRelayFollowCommand,
 } from '../../domain/dataRelayPaths';
@@ -65,6 +66,8 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
   const { t } = useI18n();
   const sshHosts = hosts.filter(isRelayCapableHost);
   const [browser, setBrowser] = useState<'source' | 'dest' | null>(null);
+  const sourceIsLocal = isDataRelayLocalHostId(draft.sourceHostId);
+  const destIsLocal = isDataRelayLocalHostId(draft.destHostId);
 
   const sourceHost = useMemo(
     () => sshHosts.find((host) => host.id === draft.sourceHostId),
@@ -137,6 +140,9 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
               <SelectValue placeholder={t('dataRelay.form.selectHost')} />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value={DATA_RELAY_LOCAL_HOST_ID}>
+                {t('dataRelay.localHost')}
+              </SelectItem>
               {sshHosts.map((host) => (
                 <SelectItem key={host.id} value={host.id}>
                   {hostName(host)}
@@ -157,17 +163,19 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
               value={draft.sourcePath || ''}
               onChange={(event) => applySourcePath(event.target.value)}
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 shrink-0"
-              disabled={!sourceHost}
-              title={t('dataRelay.form.browse')}
-              onClick={() => setBrowser('source')}
-            >
-              <FolderOpen size={16} />
-            </Button>
+            {sourceIsLocal ? null : (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 shrink-0"
+                disabled={!sourceHost}
+                title={t('dataRelay.form.browse')}
+                onClick={() => setBrowser('source')}
+              >
+                <FolderOpen size={16} />
+              </Button>
+            )}
           </div>
           <p className="text-[10px] text-muted-foreground">
             {t('dataRelay.form.sourcePathHint')}
@@ -186,6 +194,9 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
               <SelectValue placeholder={t('dataRelay.form.selectHost')} />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value={DATA_RELAY_LOCAL_HOST_ID} disabled={sourceIsLocal}>
+                {t('dataRelay.localHost')}
+              </SelectItem>
               {sshHosts.map((host) => (
                 <SelectItem key={host.id} value={host.id}>
                   {hostName(host)}
@@ -206,17 +217,19 @@ export const RuleFormPanel: React.FC<RuleFormPanelProps> = ({
               value={draft.destPath || ''}
               onChange={(event) => onChange({ destPath: event.target.value })}
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 shrink-0"
-              disabled={!destHost}
-              title={t('dataRelay.form.browse')}
-              onClick={() => setBrowser('dest')}
-            >
-              <FolderOpen size={16} />
-            </Button>
+            {destIsLocal ? null : (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 shrink-0"
+                disabled={!destHost}
+                title={t('dataRelay.form.browse')}
+                onClick={() => setBrowser('dest')}
+              >
+                <FolderOpen size={16} />
+              </Button>
+            )}
           </div>
           <p className="text-[10px] text-muted-foreground">
             {t('dataRelay.form.destPathHint')}

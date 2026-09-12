@@ -1,8 +1,9 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { useI18n } from "../../application/i18n/I18nProvider";
 import { useIsTabActive } from "../../application/state/activeTabStore";
 import { useDataRelayRuntime } from "../../application/state/dataRelayRuntimeStore";
 import type { DataRelayViewTab } from "../../application/state/dataRelayViewTabStore";
+import { resolveDataRelayEndpoint } from "../../domain/dataRelayLocal";
 import type { DataRelayRule, Host, Identity, KnownHost, SSHKey, TerminalSettings } from "../../domain/models";
 import { toast } from "../ui/toast";
 import { CompareView } from "./CompareView";
@@ -44,11 +45,14 @@ export const DataRelayRuleTabView: React.FC<DataRelayRuleTabViewProps> = ({
   const [draft, setDraft] = useState<Partial<DataRelayRule>>({});
 
   const rule = relay?.rules.find((item) => item.id === tab.ruleId);
-  const hostsById = useMemo(() => {
-    const map = new Map<string, Host>();
-    for (const host of hosts) map.set(host.id, host);
-    return map;
-  }, [hosts]);
+  // The local endpoint resolves to a pseudo host so the compare session and
+  // view treat it like any other host; connection code branches on the id.
+  const sourceHost = rule
+    ? resolveDataRelayEndpoint(rule.sourceHostId, hosts, t("dataRelay.localHost"))?.host
+    : undefined;
+  const destHost = rule
+    ? resolveDataRelayEndpoint(rule.destHostId, hosts, t("dataRelay.localHost"))?.host
+    : undefined;
 
   const persistScanSettings = useCallback((
     updates: Partial<DataRelayRule> & { scanCheckpoint?: DataRelayRule["scanCheckpoint"] | null },
@@ -81,8 +85,8 @@ export const DataRelayRuleTabView: React.FC<DataRelayRuleTabViewProps> = ({
         identities={identities}
         knownHosts={knownHosts}
         terminalSettings={terminalSettings}
-        sourceHost={hostsById.get(rule.sourceHostId)}
-        destHost={hostsById.get(rule.destHostId)}
+        sourceHost={sourceHost}
+        destHost={destHost}
         onEdit={() => {
           setDraft({ ...rule });
           setEditing(true);

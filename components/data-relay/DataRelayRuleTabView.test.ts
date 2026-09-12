@@ -60,3 +60,15 @@ test("source-pane directories offer a one-shot overwrite upload to the destinati
   assert.match(compareSessionSource, /dataRelaySubdirUploadRelativeDir\(/);
   assert.match(compareSessionSource, /Uploading \$\{sourceDir\} -> \$\{targetDir\} \(overwrite\)/);
 });
+
+test("the local machine is a selectable relay endpoint", () => {
+  const formSource = readFileSync(new URL("./RuleFormPanel.tsx", import.meta.url), "utf8");
+  assert.match(formSource, /DATA_RELAY_LOCAL_HOST_ID/);
+  assert.match(formSource, /dataRelay\.localHost/);
+  // The tab view resolves the local pseudo-host so the session can connect.
+  assert.match(tabViewSource, /resolveDataRelayEndpoint\(/);
+  // Sync plumbing branches on local sides instead of assuming SFTP sessions.
+  assert.match(compareSessionSource, /isDataRelayLocalHostId/);
+  assert.match(compareSessionSource, /listLocalDir/);
+  assert.match(readFileSync(new URL("../../application/state/useDataRelayFolderScan.ts", import.meta.url), "utf8"), /listLocalDir/);
+});

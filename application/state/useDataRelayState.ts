@@ -14,6 +14,7 @@ import {
   updateDataRelayRule,
 } from "../../domain/dataRelayAgentOps";
 import { isDataRelayFolderScanRule } from "../../domain/dataRelayScan";
+import { isDataRelayLocalHostId } from "../../domain/dataRelayLocal";
 import {
   migrateDataRelayRulesFromStorage,
   toPersistedDataRelayRules,
@@ -238,6 +239,14 @@ export const useDataRelayState = ({
         if (isScanningRef.current(ruleId)) return { success: true };
         await stopDataRelay(ruleId);
         return startScanRef.current(ruleId);
+      }
+      // Command-driven relays stream a remote shell command over exec; the
+      // local endpoint only exists for folder-scan sync rules.
+      if (isDataRelayLocalHostId(rule.sourceHostId) || isDataRelayLocalHostId(rule.destHostId)) {
+        return {
+          success: false,
+          error: "Local endpoints require a folder rule. Set a source folder path.",
+        };
       }
       await stopScanRef.current(ruleId);
       return startDataRelay(

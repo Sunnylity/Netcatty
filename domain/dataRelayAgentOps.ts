@@ -7,6 +7,7 @@ import type {
   Host,
 } from './models';
 import { buildDataRelayFollowCommand } from './dataRelayPaths';
+import { dataRelayLocalPseudoHost, isDataRelayLocalHostId } from './dataRelayLocal';
 import {
   normalizeDataRelayScanIntervalMs,
   normalizeDataRelayScanMode,
@@ -29,14 +30,19 @@ export const hasDataRelayConnectionChanged = (
 );
 
 /**
- * Both ends of a relay must be plain SSH hosts. Plugin / telnet / serial hosts
- * cannot provide a streamable exec channel plus SFTP write.
+ * Both ends of a relay must be plain SSH hosts — or the local-machine
+ * sentinel, which pairs with exactly one SSH host on the other end.
+ * Plugin / telnet / serial hosts cannot provide a streamable exec channel
+ * plus SFTP write.
  */
 export const validateDataRelayHost = (
   hosts: Host[],
   hostId: string | undefined,
   role: 'source' | 'destination',
 ): Result<Host> => {
+  if (isDataRelayLocalHostId(hostId)) {
+    return { ok: true, value: dataRelayLocalPseudoHost() };
+  }
   const host = hosts.find((candidate) => candidate.id === hostId);
   if (!hostId || !host) {
     return { ok: false, error: `Host "${hostId || ''}" was not found.` };
@@ -115,6 +121,9 @@ function buildRule(
     : String(source.destHostId).trim();
   const validatedDest = validateDataRelayHost(hosts, destHostId, 'destination');
   if ('error' in validatedDest) return { ok: false, error: validatedDest.error };
+  if (isDataRelayLocalHostId(sourceHostId) && isDataRelayLocalHostId(destHostId)) {
+    return { ok: false, error: 'A data relay needs at least one remote host.' };
+  }
 
   const writeMode = normalizeWriteMode(
     source.writeMode,

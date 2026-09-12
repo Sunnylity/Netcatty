@@ -201,3 +201,34 @@ test('duplicateDataRelayRule copies configuration without runtime state', () => 
   assert.equal(result.value.rule.error, undefined);
   assert.equal(result.value.rules.length, 2);
 });
+
+test('validateDataRelayHost accepts the local-machine sentinel', () => {
+  const result = validateDataRelayHost(hosts, 'local', 'source');
+  assert.equal('error' in result, false);
+  if ('error' in result) return;
+  assert.equal(result.value.id, 'local');
+});
+
+test('local endpoints pair with exactly one remote host', () => {
+  const localSource = createDataRelayRule([], hosts, {
+    sourceHostId: 'local',
+    sourcePath: 'D:/sync/src',
+    destHostId: 'linux',
+    destPath: '/srv/sync',
+  }, { id: 'local-1', now: 1 });
+  assert.equal('error' in localSource, false);
+  if (!('error' in localSource)) {
+    assert.equal(localSource.value.rule.sourceHostId, 'local');
+  }
+
+  const bothLocal = createDataRelayRule([], hosts, {
+    sourceHostId: 'local',
+    sourcePath: 'D:/sync/src',
+    destHostId: 'local',
+    destPath: 'D:/sync/dst',
+  }, { id: 'local-2', now: 2 });
+  assert.equal('error' in bothLocal, true);
+  if ('error' in bothLocal) {
+    assert.match(bothLocal.error, /at least one remote host/);
+  }
+});

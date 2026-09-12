@@ -746,6 +746,7 @@ export const zhCNCoreMessages: Messages = {
   'dataRelay.context.uploadDirTarget': '目标',
   'dataRelay.context.uploadDirDone': '已上传 {count} 个文件',
   'dataRelay.context.uploadDirFailed': '{count} 个文件上传失败',
+  'dataRelay.localHost': '本机',
   'vault.nav.snippets': '脚本',
   'vault.nav.notes': '笔记',
   'vault.nav.knownHosts': '已知主机',
