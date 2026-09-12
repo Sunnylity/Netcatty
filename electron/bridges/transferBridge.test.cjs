@@ -12459,6 +12459,13 @@ test("local promotion succeeds when backup still matches validated identity", as
   );
 });
 
+test("resolveSourceMtimeMs reads ssh2 seconds and Netcatty milliseconds", () => {
+  assert.equal(transferBridge._resolveSourceMtimeMsForTests({ mtime: 1_700_000_000 }), 1_700_000_000_000);
+  assert.equal(transferBridge._resolveSourceMtimeMsForTests({ modifyTime: 1_700_000_000_000 }), 1_700_000_000_000);
+  assert.equal(transferBridge._resolveSourceMtimeMsForTests({ mtimeMs: 1_700_000_000_500 }), 1_700_000_000_500);
+  assert.equal(transferBridge._resolveSourceMtimeMsForTests({}), undefined);
+});
+
 test("preserveTransferredDestinationMtime stamps local targets from sourceSoftIdentity", async (t) => {
   const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "netcatty-preserve-mtime-"));
   t.after(async () => fs.promises.rm(tempDir, { recursive: true, force: true }));

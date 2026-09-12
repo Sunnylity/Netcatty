@@ -43,6 +43,14 @@ export function normalizeDataRelayScanMode(value: unknown): DataRelayScanMode {
   return "mtime";
 }
 
+/** First start (or mtime mode) compares source vs dest before copying. */
+export function shouldCompareDataRelayScanAgainstDest(
+  rule: Pick<DataRelayRule, "scanMode" | "scanCheckpoint">,
+): boolean {
+  if (normalizeDataRelayScanMode(rule.scanMode) === "mtime") return true;
+  return !rule.scanCheckpoint?.at;
+}
+
 export function dataRelayScanIntervalParts(
   intervalMs: number | undefined,
 ): { value: number; unit: DataRelayScanIntervalUnit } {
@@ -126,6 +134,7 @@ export function mergeDataRelayScanCheckpoint(params: {
   failedPaths: ReadonlySet<string>;
   now: number;
   pruneMissing?: boolean;
+  seedAll?: boolean;
 }): DataRelayScanCheckpoint {
   const files: Record<string, DataRelayScanCheckpointFile> = {
     ...(params.previous?.files ?? {}),
@@ -134,7 +143,11 @@ export function mergeDataRelayScanCheckpoint(params: {
   for (const entry of params.sourceEntries) {
     seen.add(entry.relativePath);
     if (params.failedPaths.has(entry.relativePath)) continue;
-    if (!params.copiedPaths.has(entry.relativePath) && !files[entry.relativePath]) continue;
+    if (
+      !params.seedAll
+      && !params.copiedPaths.has(entry.relativePath)
+      && !files[entry.relativePath]
+    ) continue;
     files[entry.relativePath] = {
       size: isDataRelayCompareDirectory(entry) ? 0 : entry.size,
       lastModified: entry.lastModified,

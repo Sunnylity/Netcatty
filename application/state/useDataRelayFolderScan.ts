@@ -23,8 +23,9 @@ import {
   mergeDataRelayScanCheckpoint,
   normalizeDataRelayScanIntervalMs,
   normalizeDataRelayScanMode,
+  shouldCompareDataRelayScanAgainstDest,
 } from "../../domain/dataRelayScan";
-import { joinPath, joinTransferTargetPath } from "./sftp/utils";
+import { isWindowsPath, isWindowsRoot, joinPath, joinTransferTargetPath } from "./sftp/utils";
 import { buildSftpHostCredentials } from "./sftp/useSftpHostCredentials";
 import { useSftpBackend } from "./useSftpBackend";
 
@@ -175,7 +176,49 @@ export function useDataRelayFolderScan({
     let copyItems;
     let sourceEntries;
     let pruneMissing = false;
-    if (mode === "checkpoint") {
+    let seedAll = false;
+    if (shouldCompareDataRelayScanAgainstDest(rule)) {
+      const destIsRoot = destPath === "/" || (isWindowsPath(destPath) && isWindowsRoot(destPath));
+      if (!destIsRoot) {
+        try {
+          await mkdirSftp(destSftpId, destPath);
+        } catch {
+          // Destination folder may already exist.
+        }
+      }
+      if (session.cancelled) return;
+      const result = await compareDataRelayTreesPaired(
+        sourcePath,
+        destPath,
+        (side, path) => listDirectory(side === "left" ? sourceSftpId : destSftpId, path),
+        { joinAbsolute, cancelled, caseInsensitive },
+      );
+      if (session.cancelled) return;
+      copyItems = listDataRelayScanCopyItemsFromMtime(result.diffs);
+      if (mode === "checkpoint") {
+        const tree = await collectDataRelayCompareTree(
+          sourcePath,
+          (path) => listDirectory(sourceSftpId, path),
+          { joinAbsolute, cancelled },
+        );
+        if (session.cancelled) return;
+        sourceEntries = tree.entries;
+        pruneMissing = true;
+        seedAll = true;
+      } else {
+        sourceEntries = copyItems.map((item) => (
+          item.type === "directory"
+            ? {
+              name: item.relativePath.split("/").pop() || item.relativePath,
+              relativePath: item.relativePath,
+              type: "directory" as const,
+              size: 0,
+              lastModified: 0,
+            }
+            : { ...item.file, relativePath: item.relativePath }
+        ));
+      }
+    } else {
       const tree = await collectDataRelayCompareTree(
         sourcePath,
         (path) => listDirectory(sourceSftpId, path),
@@ -185,26 +228,6 @@ export function useDataRelayFolderScan({
       copyItems = listDataRelayScanCopyItemsFromCheckpoint(tree.entries, rule.scanCheckpoint);
       sourceEntries = tree.entries;
       pruneMissing = true;
-    } else {
-      const result = await compareDataRelayTreesPaired(
-        sourcePath,
-        destPath,
-        (side, path) => listDirectory(side === "left" ? sourceSftpId : destSftpId, path),
-        { joinAbsolute, cancelled, caseInsensitive },
-      );
-      if (session.cancelled) return;
-      copyItems = listDataRelayScanCopyItemsFromMtime(result.diffs);
-      sourceEntries = copyItems.map((item) => (
-        item.type === "directory"
-          ? {
-            name: item.relativePath.split("/").pop() || item.relativePath,
-            relativePath: item.relativePath,
-            type: "directory" as const,
-            size: 0,
-            lastModified: 0,
-          }
-          : { ...item.file, relativePath: item.relativePath }
-      ));
     }
     const copiedPaths = new Set<string>();
     const failedPaths = new Set<string>();
@@ -241,6 +264,7 @@ export function useDataRelayFolderScan({
           sourceHostId: rule.sourceHostId,
           targetHostId: rule.destHostId,
           totalBytes: item.file.size,
+          sourceLastModified: item.file.lastModified,
         });
         if (result?.error) {
           failedPaths.add(item.relativePath);
@@ -265,6 +289,7 @@ export function useDataRelayFolderScan({
       failedPaths,
       now: Date.now(),
       pruneMissing,
+      seedAll,
     }));
   }, [getSftpHomeDir, listDirectory, mkdirSftp, startStreamTransfer]);
 

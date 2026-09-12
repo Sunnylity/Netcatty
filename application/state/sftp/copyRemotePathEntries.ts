@@ -17,6 +17,7 @@ export interface CopyRemotePathTransferOptions {
   sourceHostId: string;
   targetHostId: string;
   totalBytes?: number;
+  sourceLastModified?: number;
 }
 
 export interface CopyRemotePathEntriesParams {
@@ -130,6 +131,7 @@ export async function copyRemotePathEntries(
             sourceHostId: params.sourceHostId,
             targetHostId: params.destHostId,
             totalBytes: item.size,
+            sourceLastModified: item.lastModified,
           });
           if (result?.error) {
             failed.push(`${entry.name}/${item.relativePath}`);
@@ -152,6 +154,7 @@ export async function copyRemotePathEntries(
         sourceHostId: params.sourceHostId,
         targetHostId: params.destHostId,
         totalBytes: entry.size,
+        sourceLastModified: entry.lastModified,
       });
       if (result?.error) {
         failed.push(entry.name);

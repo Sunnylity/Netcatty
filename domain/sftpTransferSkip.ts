@@ -31,6 +31,24 @@ export function normalizeTransferMtimeSeconds(
   return lastModified >= 1e10 ? Math.floor(lastModified / 1000) : Math.floor(lastModified);
 }
 
+/**
+ * Read mtime from mixed SFTP/local stat shapes (ssh2 seconds, Netcatty
+ * `modifyTime` milliseconds, Node `mtimeMs`).
+ */
+export function resolveRemoteStatMtimeMs(stat: {
+  mtimeMs?: number;
+  modifyTime?: number;
+  mtime?: number;
+} | null | undefined): number | undefined {
+  if (!stat) return undefined;
+  for (const value of [stat.mtimeMs, stat.modifyTime, stat.mtime]) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    return n >= 1e10 ? Math.floor(n) : Math.floor(n * 1000);
+  }
+  return undefined;
+}
+
 export function isUnchangedTransferCandidate(
   source: TransferSkipIdentity,
   target: TransferSkipIdentity,

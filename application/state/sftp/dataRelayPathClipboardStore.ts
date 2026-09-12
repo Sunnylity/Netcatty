@@ -4,6 +4,7 @@ export interface DataRelayPathClipboardEntry {
   name: string;
   isDirectory: boolean;
   size: number;
+  lastModified?: number;
 }
 
 export interface DataRelayPathClipboard {

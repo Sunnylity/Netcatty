@@ -10,6 +10,7 @@ import {
   mergeDataRelayScanCheckpoint,
   normalizeDataRelayScanIntervalMs,
   normalizeDataRelayScanMode,
+  shouldCompareDataRelayScanAgainstDest,
 } from "./dataRelayScan";
 
 const entry = (
@@ -39,6 +40,19 @@ test("normalizeDataRelayScanMode accepts checkpoint aliases", () => {
   assert.equal(normalizeDataRelayScanMode("checkpoint"), "checkpoint");
   assert.equal(normalizeDataRelayScanMode("watermark"), "checkpoint");
   assert.equal(normalizeDataRelayScanMode(""), "mtime");
+});
+
+test("shouldCompareDataRelayScanAgainstDest is true on first start", () => {
+  assert.equal(shouldCompareDataRelayScanAgainstDest({ scanMode: "mtime" }), true);
+  assert.equal(shouldCompareDataRelayScanAgainstDest({ scanMode: "checkpoint" }), true);
+  assert.equal(shouldCompareDataRelayScanAgainstDest({
+    scanMode: "checkpoint",
+    scanCheckpoint: { at: 1, files: { "a.log": { size: 1, lastModified: 1 } } },
+  }), false);
+  assert.equal(shouldCompareDataRelayScanAgainstDest({
+    scanMode: "mtime",
+    scanCheckpoint: { at: 1, files: { "a.log": { size: 1, lastModified: 1 } } },
+  }), true);
 });
 
 test("dataRelayScanIntervalParts round-trips minutes and seconds", () => {
@@ -74,6 +88,23 @@ test("mtime scan copies source-only and newer source files", () => {
   ];
   const items = listDataRelayScanCopyItemsFromMtime(diffs);
   assert.deepEqual(items.map((item) => item.relativePath), ["new.log", "stale.log"]);
+});
+
+test("first start copies dest diffs instead of every source file", () => {
+  const diffs: DataRelayCompareRow[] = [
+    {
+      relativePath: "keep.log",
+      name: "keep.log",
+      kind: "same",
+      left: entry("keep.log"),
+      right: entry("keep.log"),
+    },
+    { relativePath: "new.log", name: "new.log", kind: "left-only", left: entry("new.log") },
+  ];
+  assert.deepEqual(
+    listDataRelayScanCopyItemsFromMtime(diffs).map((item) => item.relativePath),
+    ["new.log"],
+  );
 });
 
 test("checkpoint scan copies files missing from or newer than the last upload set", () => {
@@ -122,4 +153,19 @@ test("mergeDataRelayScanCheckpoint records copies and retries failures", () => {
   assert.deepEqual(merged.files["ok.log"], { size: 12, lastModified: 9 });
   assert.deepEqual(merged.files["fail.log"], { size: 1, lastModified: 1 });
   assert.deepEqual(merged.files["skip.log"], { size: 3, lastModified: 2 });
+});
+
+test("mergeDataRelayScanCheckpoint seedAll records unchanged source files", () => {
+  const merged = mergeDataRelayScanCheckpoint({
+    sourceEntries: [
+      entry("keep.log", { size: 10, lastModified: 1_000 }),
+      entry("new.log", { size: 4, lastModified: 2_000 }),
+    ],
+    copiedPaths: new Set(["new.log"]),
+    failedPaths: new Set(),
+    now: 50,
+    seedAll: true,
+  });
+  assert.deepEqual(merged.files["keep.log"], { size: 10, lastModified: 1_000 });
+  assert.deepEqual(merged.files["new.log"], { size: 4, lastModified: 2_000 });
 });

@@ -58,7 +58,7 @@ test("copyRemotePathEntries copies files and nested folders", async () => {
     ],
   };
   const mkdirs: string[] = [];
-  const transfers: Array<{ sourcePath: string; targetPath: string }> = [];
+  const transfers: Array<{ sourcePath: string; targetPath: string; sourceLastModified?: number }> = [];
 
   const result = await copyRemotePathEntries({
     sourceSftpId: "src",
@@ -68,7 +68,7 @@ test("copyRemotePathEntries copies files and nested folders", async () => {
     sourcePath: "/src",
     destPath: "/dst",
     entries: [
-      { name: "app.log", isDirectory: false, size: 10 },
+      { name: "app.log", isDirectory: false, size: 10, lastModified: 9 },
       { name: "logs", isDirectory: true, size: 0 },
     ],
     list: async (_sftpId, path) => listings[path] ?? [],
@@ -76,15 +76,19 @@ test("copyRemotePathEntries copies files and nested folders", async () => {
       mkdirs.push(path);
     },
     transfer: async (options) => {
-      transfers.push({ sourcePath: options.sourcePath, targetPath: options.targetPath });
+      transfers.push({
+        sourcePath: options.sourcePath,
+        targetPath: options.targetPath,
+        sourceLastModified: options.sourceLastModified,
+      });
     },
   });
 
   assert.deepEqual(mkdirs, ["/dst/logs", "/dst/logs/keep"]);
   assert.deepEqual(transfers, [
-    { sourcePath: "/src/app.log", targetPath: "/dst/app.log" },
-    { sourcePath: "/src/logs/nested.txt", targetPath: "/dst/logs/nested.txt" },
-    { sourcePath: "/src/logs/keep/inner.txt", targetPath: "/dst/logs/keep/inner.txt" },
+    { sourcePath: "/src/app.log", targetPath: "/dst/app.log", sourceLastModified: 9 },
+    { sourcePath: "/src/logs/nested.txt", targetPath: "/dst/logs/nested.txt", sourceLastModified: 1 },
+    { sourcePath: "/src/logs/keep/inner.txt", targetPath: "/dst/logs/keep/inner.txt", sourceLastModified: 1 },
   ]);
   assert.deepEqual(result.failed, []);
   assert.deepEqual(result.skipped, []);

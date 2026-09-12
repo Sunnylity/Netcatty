@@ -448,6 +448,7 @@ export function useDataRelayCompareSession({
         sourceHostId,
         targetHostId,
         totalBytes: item.file.size,
+        sourceLastModified: item.file.lastModified,
       });
       progress.done += 1;
       setCopyProgress({ done: progress.done, total: progress.total });
@@ -602,6 +603,7 @@ export function useDataRelayCompareSession({
         name: file.name,
         isDirectory: isDir(file),
         size: file.size,
+        lastModified: file.lastModified,
       }));
     if (entries.length === 0) return 0;
     setDataRelayPathClipboard({

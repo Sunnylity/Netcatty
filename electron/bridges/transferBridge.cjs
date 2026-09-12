@@ -1099,6 +1099,20 @@ async function promoteLocalTransfer(stagedPath, targetPath, options = {}) {
 }
 
 /**
+ * Mixed SFTP/local stat shapes: ssh2 `mtime` is seconds, Netcatty listings and
+ * session-backed stats expose `modifyTime` / `mtimeMs` in milliseconds.
+ */
+function resolveSourceMtimeMs(stat) {
+  if (!stat || typeof stat !== "object") return undefined;
+  for (const value of [stat.mtimeMs, stat.modifyTime, stat.mtime]) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    return n >= 1e10 ? Math.floor(n) : Math.floor(n * 1000);
+  }
+  return undefined;
+}
+
+/**
  * Apply the source mtime to the committed destination so skip-unchanged
  * (size + mtime) can match on a later folder transfer. Best-effort: never
  * fails the transfer if utimes/setstat is unsupported or times out.
@@ -5198,6 +5212,17 @@ async function startTransferNow(event, payload, onProgress) {
           : `${sourceType}->${targetType}`,
     diagFileName: basenameForDiag(sourcePath) || basenameForDiag(targetPath) || transferId,
   };
+  const payloadMtimeMs = resolveSourceMtimeMs({
+    mtimeMs: payload.sourceSoftIdentity?.mtimeMs,
+    modifyTime: payload.sourceLastModified,
+  });
+  if (payloadMtimeMs || Number(payload.sourceSoftIdentity?.size) > 0) {
+    transfer.sourceSoftIdentity = {
+      size: Number(payload.sourceSoftIdentity?.size) || Number(totalBytes) || 0,
+      mtimeMs: payloadMtimeMs,
+      sample: payload.sourceSoftIdentity?.sample || null,
+    };
+  }
   logTransferDiag(transfer, "start", {
     total: transfer.diagTotalBytes,
     transferred: transfer.checkpointBytes,
@@ -5517,7 +5542,7 @@ async function startTransferNow(event, payload, onProgress) {
         : null;
       return {
         size: st.size,
-        mtimeMs: Number.isFinite(st.mtimeMs) ? st.mtimeMs : undefined,
+        mtimeMs: resolveSourceMtimeMs(st),
         sample: sample ? `sha256:${sample}` : null,
       };
     }
@@ -5532,8 +5557,7 @@ async function startTransferNow(event, payload, onProgress) {
           signal: transfer.signal,
         });
         size = st.size;
-        mtimeMs = Number.isFinite(st.mtimeMs) ? st.mtimeMs
-          : (Number.isFinite(st.mtime) ? st.mtime * 1000 : undefined);
+        mtimeMs = resolveSourceMtimeMs(st);
       } else {
         // Race channel reopen against cancel (Codex P2): a dead sftp handle can
         // sit in requireSftpChannel for ~10s; cancel must not wait that out.
@@ -5541,9 +5565,7 @@ async function startTransferNow(event, payload, onProgress) {
         const encoded = encodePathForSession(sourceSftpId, sourcePath, sourceEncoding);
         const st = await client.stat(encoded);
         size = st.size;
-        // ssh2 attrs: mtime is seconds.
-        mtimeMs = Number.isFinite(st.mtimeMs) ? st.mtimeMs
-          : (Number.isFinite(st.mtime) ? st.mtime * 1000 : undefined);
+        mtimeMs = resolveSourceMtimeMs(st);
       }
       // Skip remote head samples here: open-ended SFTP reads hang on incomplete
       // mocks and slow links. Size + mtime covers same-size rewrites that bump
@@ -5559,7 +5581,13 @@ async function startTransferNow(event, payload, onProgress) {
 
   transfer.captureSourceSoftIdentity = async () => {
     try {
-      transfer.sourceSoftIdentity = await readSourceSoftIdentity();
+      const captured = await readSourceSoftIdentity();
+      const previous = transfer.sourceSoftIdentity;
+      transfer.sourceSoftIdentity = {
+        size: Number(captured.size) || previous?.size || 0,
+        mtimeMs: resolveSourceMtimeMs(captured) || previous?.mtimeMs,
+        sample: captured.sample ?? previous?.sample ?? null,
+      };
     } catch (error) {
       // Propagate cancel/abort so preflight racing can settle; other failures
       // stay best-effort (soft resume simply lacks a baseline).
@@ -7470,6 +7498,7 @@ module.exports = {
   listTransferSftpIds,
   _promoteLocalTransferForTests: promoteLocalTransfer,
   _preserveTransferredDestinationMtimeForTests: preserveTransferredDestinationMtime,
+  _resolveSourceMtimeMsForTests: resolveSourceMtimeMs,
   _restoreRemoteUploadModeBestEffortForTests: restoreRemoteUploadModeBestEffort,
   _waitForPendingWriteOpenPathGateForTests: waitForPendingWriteOpenPathGate,
   _stableLocalFileIdentityForTests: stableLocalFileIdentity,

@@ -1771,9 +1771,13 @@ async function pipeStreams(source, destination, signal = null) {
 function statResultFromAttrs(attrs) {
   const mode = attrs?.mode || 0;
   const fileTypeMask = mode & 0o170000;
+  const mtimeSec = Number(attrs?.mtime) || 0;
+  const modifyTime = mtimeSec * 1000;
   return {
     size: attrs?.size || 0,
-    modifyTime: (attrs?.mtime || 0) * 1000,
+    modifyTime,
+    mtime: mtimeSec,
+    mtimeMs: modifyTime,
     mode,
     isDirectory: typeof attrs?.isDirectory === "function"
       ? attrs.isDirectory()
@@ -1880,6 +1884,12 @@ function createSessionBackedSftpClient(sessionId, sshClient, options = {}) {
           return;
         }
         sftp.setstat(remotePath, { mode }, (err) => (err ? reject(err) : resolve()));
+      });
+    },
+    async setStat(remotePath, attrs) {
+      const sftp = await requireSftpChannel(client);
+      await new Promise((resolve, reject) => {
+        sftp.setstat(remotePath, attrs, (err) => (err ? reject(err) : resolve()));
       });
     },
     async end() {

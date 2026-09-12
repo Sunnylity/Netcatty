@@ -86,8 +86,9 @@ declare global {
         lifecycleState?: 'queued' | 'pausing' | 'paused' | 'transferring';
         pauseUnavailableReason?: string;
         globalConcurrency?: number;
-        /** When true, skip main-process admission (renderer already scheduled). */
         skipAdmission?: boolean;
+        /** Source mtime in milliseconds; stamped onto the destination after copy. */
+        sourceLastModified?: number;
       }
     ): Promise<{ transferId: string; totalBytes?: number; error?: string; cancelled?: boolean }>;
     pauseTransfer?(transferId: string): Promise<{

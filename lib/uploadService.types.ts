@@ -108,6 +108,7 @@ export interface UploadBridge {
       pauseUnavailableReason?: string;
       globalConcurrency?: number;
       skipAdmission?: boolean;
+      sourceLastModified?: number;
     }
   ) => Promise<{ transferId: string; totalBytes?: number; error?: string; cancelled?: boolean }>;
   cancelTransfer?: (transferId: string) => Promise<void>;

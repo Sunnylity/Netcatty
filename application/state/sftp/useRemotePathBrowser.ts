@@ -23,7 +23,7 @@ import { getParentPath, isSafeNewFolderName, joinPath } from "./utils";
 import { buildSftpHostCredentials } from "./useSftpHostCredentials";
 import { useSftpBackend } from "../useSftpBackend";
 
-export type RemotePathBrowserEntry = Pick<RemoteFile, "name" | "type" | "linkTarget" | "size">;
+export type RemotePathBrowserEntry = Pick<RemoteFile, "name" | "type" | "linkTarget" | "size" | "lastModified">;
 
 export interface UseRemotePathBrowserParams {
   open: boolean;
@@ -128,6 +128,7 @@ export function useRemotePathBrowser({
           type: entry.type,
           linkTarget: entry.linkTarget,
           size: entry.size,
+          lastModified: entry.lastModified,
         }))
         .sort(compareEntries);
       setEntries(next);
@@ -278,6 +279,7 @@ export function useRemotePathBrowser({
         name: file.name,
         isDirectory: isDirectoryEntry(file),
         size: Number.parseInt(String(file.size), 10) || 0,
+        lastModified: new Date(file.lastModified).getTime() || 0,
       }));
     if (entries.length === 0) return 0;
     setDataRelayPathClipboard({

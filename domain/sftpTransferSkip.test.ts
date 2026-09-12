@@ -4,7 +4,16 @@ import test from "node:test";
 import {
   isUnchangedTransferCandidate,
   normalizeTransferMtimeSeconds,
+  resolveRemoteStatMtimeMs,
 } from "./sftpTransferSkip";
+
+test("resolveRemoteStatMtimeMs reads ssh2 seconds and Netcatty milliseconds", () => {
+  assert.equal(resolveRemoteStatMtimeMs({ mtime: 1_700_000_000 }), 1_700_000_000_000);
+  assert.equal(resolveRemoteStatMtimeMs({ modifyTime: 1_700_000_000_000 }), 1_700_000_000_000);
+  assert.equal(resolveRemoteStatMtimeMs({ mtimeMs: 1_700_000_000_500 }), 1_700_000_000_500);
+  assert.equal(resolveRemoteStatMtimeMs({}), undefined);
+  assert.equal(resolveRemoteStatMtimeMs(null), undefined);
+});
 
 test("normalizeTransferMtimeSeconds accepts seconds and milliseconds", () => {
   assert.equal(normalizeTransferMtimeSeconds(1_700_000_000), 1_700_000_000);
