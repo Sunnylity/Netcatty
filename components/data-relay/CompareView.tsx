@@ -110,9 +110,11 @@ const kindClass = (kind: DataRelayCompareKind | undefined): string => {
 const isDir = (file: DataRelayCompareFile): boolean =>
   file.type === "directory" || file.linkTarget === "directory";
 
-// MSYS path of the Blender executable used by "Run in Blender" on local .py
-// files. Adjust here when Blender updates or lives elsewhere.
-const BLENDER_EXECUTABLE_MSYS_PATH = "/c/Program Files/Blender Foundation/Blender 5.1/blender.exe";
+// MSYS path of the Blender executable used by "Run in Blender" on source .py
+// files, plus its launch flags (-b: background, no GUI window). Adjust here
+// when Blender updates or lives elsewhere.
+const BLENDER_EXECUTABLE_MSYS_PATH = "/c/blender-5.2.0-windows-x64/blender.exe";
+const BLENDER_LAUNCH_FLAGS = "-b";
 
 const isPythonFile = (file: DataRelayCompareFile): boolean =>
   !isDir(file) && file.name.toLowerCase().endsWith(".py");
@@ -584,7 +586,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
   const handleRunInBlender = useCallback((file: DataRelayCompareFile) => {
     if (!onOpenTerminalAndWriteCommand) return;
     const fullPath = joinPath(left.path, file.name);
-    const command = `"${BLENDER_EXECUTABLE_MSYS_PATH}" --python "${fullPath}"`;
+    const command = `"${BLENDER_EXECUTABLE_MSYS_PATH}" ${BLENDER_LAUNCH_FLAGS} --python "${fullPath}"`;
     onOpenTerminalAndWriteCommand({
       ...(sourceHost && !sourceIsLocal ? { host: sourceHost } : {}),
       command,
