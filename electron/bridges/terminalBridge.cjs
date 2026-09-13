@@ -950,6 +950,22 @@ function startLocalSession(event, payload) {
     // node-pty can only clear ConPTY through its bundled conpty.dll.
     useConptyDll: process.platform === "win32",
   });
+
+  // Windows console codepage: native child programs (blender.exe, python.exe,
+  // ...) write raw bytes that ConPTY decodes with the console codepage — GBK
+  // on Chinese Windows — turning their UTF-8 output into mojibake. Shells
+  // themselves use wide-char console APIs and are unaffected. Switch the
+  // pseudo console to UTF-8 once at startup, matching the UTF-8 locale forced
+  // by applyLocaleDefaults above. chcp is a cmd builtin, so bash-style shells
+  // invoke chcp.com from System32 instead.
+  if (process.platform === "win32") {
+    const chcpCommand = shellKind === "powershell"
+      ? "chcp 65001 > $null 2>&1\r"
+      : shellKind === "cmd"
+        ? "chcp 65001 >nul 2>&1\r"
+        : "chcp.com 65001 >/dev/null 2>&1\r";
+    try { proc.write(chcpCommand); } catch { /* best-effort startup tuning */ }
+  }
   
   const session = {
     proc,
