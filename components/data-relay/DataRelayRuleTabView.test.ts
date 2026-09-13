@@ -75,6 +75,16 @@ test("the local machine is a selectable relay endpoint", () => {
   assert.match(readFileSync(new URL("../../application/state/useDataRelayFolderScan.ts", import.meta.url), "utf8"), /listLocalDir/);
 });
 
+test("closing the compare view mid-transfer defers session release", () => {
+  // In-flight copy/upload ops pin the SFTP channels so transfers finish
+  // instead of dying as queue-occupying zombies; release runs when the last
+  // op settles.
+  assert.match(compareSessionSource, /activeTransferOpsRef\.current > 0/);
+  assert.match(compareSessionSource, /pendingSessionReleaseRef\.current = \{ leftId, rightId \}/);
+  assert.match(compareSessionSource, /beginTransferOp\(\)/);
+  assert.match(compareSessionSource, /finishTransferOp\(\)/);
+});
+
 test("source-pane .py files offer Run in Blender through a typed command", () => {
   // Menu item exists and is bound to .py rows on the SOURCE pane only.
   assert.match(

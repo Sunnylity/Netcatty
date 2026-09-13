@@ -154,6 +154,11 @@ export function useDataRelayCompareSession({
   const rightGenRef = useRef(0);
   const compareGenRef = useRef(0);
   const uploadGenRef = useRef(0);
+  // In-flight copy/upload/paste operations. Closing the panel mid-transfer
+  // must not kill their SFTP channels: a transfer aborted that way can occupy
+  // a global transfer-queue slot forever and block every later upload.
+  const activeTransferOpsRef = useRef(0);
+  const pendingSessionReleaseRef = useRef<{ leftId: string | null; rightId: string | null } | null>(null);
   const compareProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestCompareProgressRef = useRef<DataRelayCompareProgress | null>(null);
   const leftRef = useRef(left);
@@ -175,6 +180,28 @@ export function useDataRelayCompareSession({
       // Best-effort: the main process still owns session cleanup.
     }
   }, [closeSftp]);
+
+  const releaseCapturedSessions = useCallback((leftId: string | null, rightId: string | null) => {
+    if (leftSftpRef.current === leftId) leftSftpRef.current = null;
+    if (rightSftpRef.current === rightId) rightSftpRef.current = null;
+    void releaseSftp(leftId);
+    void releaseSftp(rightId);
+  }, [releaseSftp]);
+
+  const beginTransferOp = useCallback(() => {
+    activeTransferOpsRef.current += 1;
+  }, []);
+
+  const finishTransferOp = useCallback(() => {
+    activeTransferOpsRef.current = Math.max(0, activeTransferOpsRef.current - 1);
+    // A panel closed mid-transfer deferred its session release; run it once
+    // the last in-flight operation settles.
+    const pending = pendingSessionReleaseRef.current;
+    if (pending && activeTransferOpsRef.current === 0) {
+      pendingSessionReleaseRef.current = null;
+      releaseCapturedSessions(pending.leftId, pending.rightId);
+    }
+  }, [releaseCapturedSessions]);
 
   // A null sftp id on a side means that side is the local machine.
   const sideIsLocal = useCallback((side: DataRelayCompareSide): boolean =>
@@ -314,10 +341,14 @@ export function useDataRelayCompareSession({
       compareGenRef.current += 1;
       const leftId = leftSftpRef.current;
       const rightId = rightSftpRef.current;
-      leftSftpRef.current = null;
-      rightSftpRef.current = null;
-      void releaseSftp(leftId);
-      void releaseSftp(rightId);
+      if (activeTransferOpsRef.current > 0 && (leftId || rightId)) {
+        // The pane is closing while copies are still running. Keep the
+        // channels (and their refs) alive so the transfers can finish; the
+        // deferred release fires when the last operation settles.
+        pendingSessionReleaseRef.current = { leftId, rightId };
+        return;
+      }
+      releaseCapturedSessions(leftId, rightId);
     };
   }, [
     active,
@@ -328,7 +359,7 @@ export function useDataRelayCompareSession({
     rule.destPath,
     appendLog,
     connectPane,
-    releaseSftp,
+    releaseCapturedSessions,
   ]);
 
   const navigate = useCallback(async (side: DataRelayCompareSide, path: string) => {
@@ -581,6 +612,7 @@ export function useDataRelayCompareSession({
       return;
     }
 
+    beginTransferOp();
     setCopying(true);
     setCopyProgress({ done: 0, total });
     try {
@@ -606,8 +638,9 @@ export function useDataRelayCompareSession({
     } finally {
       setCopying(false);
       setCopyProgress(null);
+      finishTransferOp();
     }
-  }, [appendLog, compared, copyOneDirection, refreshBoth, rows, runCompare]);
+  }, [appendLog, beginTransferOp, compared, copyOneDirection, finishTransferOp, refreshBoth, rows, runCompare]);
 
   /** Resolve where a one-shot subdirectory upload would land, for confirm UI. */
   const resolveSubdirUploadTarget = useCallback((name: string): string | null => {
@@ -651,6 +684,7 @@ export function useDataRelayCompareSession({
 
     const gen = ++uploadGenRef.current;
     const cancelled = () => uploadGenRef.current !== gen;
+    beginTransferOp();
     setUploading(true);
     appendLog(`Uploading ${sourceDir} -> ${targetDir} (overwrite)`);
     try {
@@ -752,10 +786,13 @@ export function useDataRelayCompareSession({
       return { copied: 0, failed: 1 };
     } finally {
       if (uploadGenRef.current === gen) setUploading(false);
+      finishTransferOp();
     }
   }, [
     appendLog,
+    beginTransferOp,
     destHost,
+    finishTransferOp,
     listTreePath,
     mkdirSftp,
     refreshBoth,
@@ -891,6 +928,7 @@ export function useDataRelayCompareSession({
       throw new Error("source-gone");
     }
 
+    beginTransferOp();
     setCopying(true);
     try {
       const result = await copyRemotePathEntries({
@@ -928,8 +966,9 @@ export function useDataRelayCompareSession({
       throw err;
     } finally {
       setCopying(false);
+      finishTransferOp();
     }
-  }, [appendLog, listPane, listSftp, mkdirSftp, rule.destHostId, rule.sourceHostId, startStreamTransfer]);
+  }, [appendLog, beginTransferOp, finishTransferOp, listPane, listSftp, mkdirSftp, rule.destHostId, rule.sourceHostId, startStreamTransfer]);
 
   const deleteEntries = useCallback(async (side: DataRelayCompareSide, files: DataRelayCompareFile[]) => {
     const names = files.map((file) => file.name).filter(isSafeNewFolderName);
