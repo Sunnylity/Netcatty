@@ -349,6 +349,8 @@ export const esVaultMessages: Messages = {
   'sftp.transfers': 'Transferencias',
   'sftp.transfers.active': '{count} activas',
   'sftp.transfers.clearCompleted': 'Limpiar completadas',
+  'sftp.transfers.pauseAll': 'Pausar todo',
+  'sftp.transfers.resumeAll': 'Reanudar todo',
   'sftp.transfers.calculatingTotal': 'Calculando el tamaño total...',
   'sftp.transfers.filesCount': '{count} archivos',
   'sftp.transfers.filesProgress': '{current}/{total} archivos',

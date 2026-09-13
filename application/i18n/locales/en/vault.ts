@@ -349,6 +349,8 @@ export const enVaultMessages: Messages = {
   'sftp.transfers': 'Transfers',
   'sftp.transfers.active': '{count} active',
   'sftp.transfers.clearCompleted': 'Clear completed',
+  'sftp.transfers.pauseAll': 'Pause all',
+  'sftp.transfers.resumeAll': 'Resume all',
   'sftp.transfers.calculatingTotal': 'Calculating total size...',
   'sftp.transfers.filesCount': '{count} files',
   'sftp.transfers.filesProgress': '{current}/{total} files',

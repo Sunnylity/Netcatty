@@ -1091,6 +1091,10 @@ export const zhCNCoreMessages: Messages = {
   'sftp.status.uploading': '上传中...',
   'sftp.status.ready': '就绪',
   'sftp.transfers': '传输',
+
+  'sftp.transfers.pauseAll': '全部暂停',
+
+  'sftp.transfers.resumeAll': '全部继续',
   'sftp.transfers.active': '{count} 个进行中',
   'sftp.transfers.clearCompleted': '清除已完成',
   'sftp.transfers.calculatingTotal': '正在统计总大小...',

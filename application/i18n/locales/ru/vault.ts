@@ -387,6 +387,8 @@ export const ruVaultMessages: Messages = {
   'sftp.transfers': 'Передачи',
   'sftp.transfers.active': '{count} активн(ый/ых)',
   'sftp.transfers.clearCompleted': 'Очистить завершённые',
+  'sftp.transfers.pauseAll': 'Приостановить все',
+  'sftp.transfers.resumeAll': 'Продолжить все',
   'sftp.transfers.calculatingTotal': 'Вычисление общего размера...',
   'sftp.transfers.filesCount': '{count} файл(ов)',
   'sftp.transfers.filesProgress': '{current}/{total} файл(ов)',

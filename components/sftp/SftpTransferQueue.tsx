@@ -1,7 +1,13 @@
-import { GripHorizontal } from "lucide-react";
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { GripHorizontal, Pause, Play } from "lucide-react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useI18n } from "../../application/i18n/I18nProvider";
 import { sftpTransferCenterStore } from "../../application/state/sftpTransferCenterStore";
+import {
+  getGlobalTransferPauseSnapshot,
+  pauseAllTransfers,
+  resumeAllTransfers,
+  subscribeGlobalTransferPause,
+} from "../../application/state/sftp/globalTransferPause";
 import { useStoredNumber } from "../../application/state/useStoredNumber";
 import type { useSftpState } from "../../application/state/useSftpState";
 import {
@@ -172,6 +178,10 @@ export const SftpTransferQueue: React.FC<SftpTransferQueueProps> = ({
   onCopyTransferTargetPath,
 }) => {
   const { t } = useI18n();
+  const globalPause = useSyncExternalStore(subscribeGlobalTransferPause, getGlobalTransferPauseSnapshot, getGlobalTransferPauseSnapshot);
+  const handleToggleGlobalPause = useCallback(() => {
+    void (globalPause.paused ? resumeAllTransfers() : pauseAllTransfers());
+  }, [globalPause.paused]);
   const [expandedParents, setExpandedParents] = useState<Record<string, boolean>>({});
   const [panelHeight, setPanelHeight, persistPanelHeight] = useStoredNumber(
     STORAGE_KEY_SFTP_TRANSFER_PANEL_HEIGHT,
@@ -390,18 +400,31 @@ export const SftpTransferQueue: React.FC<SftpTransferQueueProps> = ({
           )}
         </span>
 
-        {sftp.transfers.some(
-          (transfer) => transfer.status === "completed" || transfer.status === "cancelled",
-        ) && (
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="sm"
-            className="h-5 px-1.5 text-[11px]"
-            onClick={sftp.clearCompletedTransfers}
+            className="h-5 gap-1 px-1.5 text-[11px]"
+            onClick={handleToggleGlobalPause}
           >
-            {t("sftp.transfers.clearCompleted")}
+            {globalPause.paused
+              ? <Play size={12} />
+              : <Pause size={12} />}
+            {globalPause.paused ? t("sftp.transfers.resumeAll") : t("sftp.transfers.pauseAll")}
           </Button>
-        )}
+          {sftp.transfers.some(
+            (transfer) => transfer.status === "completed" || transfer.status === "cancelled",
+          ) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 px-1.5 text-[11px]"
+              onClick={sftp.clearCompletedTransfers}
+            >
+              {t("sftp.transfers.clearCompleted")}
+            </Button>
+          )}
+        </div>
       </div>
 
       <div

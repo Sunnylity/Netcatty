@@ -1094,6 +1094,10 @@ export const zhTWCoreMessages: Messages = {
   'sftp.status.uploading': '上傳中...',
   'sftp.status.ready': '就緒',
   'sftp.transfers': '傳輸',
+
+  'sftp.transfers.pauseAll': '全部暫停',
+
+  'sftp.transfers.resumeAll': '全部繼續',
   'sftp.transfers.active': '{count} 個進行中',
   'sftp.transfers.clearCompleted': '清除已完成',
   'sftp.transfers.calculatingTotal': '正在統計總大小...',
