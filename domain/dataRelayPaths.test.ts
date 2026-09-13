@@ -4,6 +4,7 @@ import {
   buildDataRelayFollowCommand,
   dataRelaySubdirUploadRelativeDir,
   getDataRelayFileName,
+  isDataRelayPathUnderRoot,
   joinDataRelayPath,
   resolveDataRelayDestPath,
   resolveDataRelayViewerStart,
@@ -79,3 +80,17 @@ test("dataRelaySubdirUploadRelativeDir mirrors the browsed position under the sy
   );
 });
 
+
+test("isDataRelayPathUnderRoot only accepts paths inside the sync root", () => {
+  assert.equal(isDataRelayPathUnderRoot("/srv/root", "/srv/root"), true);
+  assert.equal(isDataRelayPathUnderRoot("/srv/root", "/srv/root/apps/web"), true);
+  assert.equal(isDataRelayPathUnderRoot("/srv/root/", "/srv/root/apps"), true);
+  // Segment boundary: a sibling with a shared prefix is not inside.
+  assert.equal(isDataRelayPathUnderRoot("/srv/root", "/srv/root-other"), false);
+  assert.equal(isDataRelayPathUnderRoot("/srv/root", "/etc"), false);
+  assert.equal(isDataRelayPathUnderRoot("/srv/root", ""), false);
+  // Windows roots compare case-insensitively across mixed separators.
+  assert.equal(isDataRelayPathUnderRoot("D:\\Sync\\root", "d:/sync/root/apps"), true);
+  assert.equal(isDataRelayPathUnderRoot("D:\\Sync\\root", "D:\\Sync\\root"), true);
+  assert.equal(isDataRelayPathUnderRoot("D:\\Sync\\root", "D:\\Sync\\other"), false);
+});

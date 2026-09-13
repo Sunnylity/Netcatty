@@ -39,6 +39,24 @@ export function joinDataRelayPath(base: string, name: string): string {
 }
 
 /**
+ * True when `browsePath` sits inside `sourceRoot` (or equals it). Windows-
+ * style roots compare case-insensitively and tolerate mixed separators; the
+ * segment boundary is honored so /src-other is not "under" /src.
+ */
+export function isDataRelayPathUnderRoot(sourceRoot: string, browsePath: string): boolean {
+  const root = stripDataRelayTrailingSep(sourceRoot);
+  const browse = stripDataRelayTrailingSep(browsePath);
+  if (!root) return true;
+  if (!browse) return false;
+  if (usesWindowsDataRelayPath(root)) {
+    const rootNormalized = root.replace(/\\/g, "/").toLowerCase();
+    const browseNormalized = browse.replace(/\\/g, "/").toLowerCase();
+    return browseNormalized === rootNormalized || browseNormalized.startsWith(`${rootNormalized}/`);
+  }
+  return browse === root || browse.startsWith(`${root}/`);
+}
+
+/**
  * Mirror one browsed subdirectory's position under its sync root for a
  * one-shot upload: the relative path inside the source root is replayed under
  * the destination root; when the panes browsed outside the root the subtree

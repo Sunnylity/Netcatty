@@ -32,7 +32,7 @@ import {
   joinPath,
 } from "../../application/state/sftp/utils";
 import type { DataRelayCompareFile, DataRelayCompareKind } from "../../domain/dataRelayCompare";
-import { resolveDataRelayViewerStart } from "../../domain/dataRelayPaths";
+import { resolveDataRelayViewerStart, isDataRelayPathUnderRoot } from "../../domain/dataRelayPaths";
 import { isDataRelayLocalHostId } from "../../domain/dataRelayLocal";
 import type { DataRelayRule, Host, Identity, KnownHost, SSHKey, TerminalSettings } from "../../domain/models";
 import { cn } from "../../lib/utils";
@@ -395,6 +395,13 @@ export const CompareView: React.FC<CompareViewProps> = ({
   // open-in-terminal are SFTP-only surfaces.
   const sourceIsLocal = isDataRelayLocalHostId(rule.sourceHostId);
   const destIsLocal = isDataRelayLocalHostId(rule.destHostId);
+  // One-shot subdirectory uploads only make sense inside the configured sync
+  // root — outside it the mirrored destination position is undefined, so the
+  // context action stays hidden.
+  const sourceSyncRoot = left.ready
+    ? resolveDataRelayViewerStart(rule.sourcePath, left.homeDir || "/").listPath
+    : null;
+  const browsingInsideSyncRoot = sourceSyncRoot !== null && isDataRelayPathUnderRoot(sourceSyncRoot, left.path);
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -667,7 +674,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           onPaste={sourceIsLocal ? undefined : () => void handlePaste("left")}
           onDelete={(file) => setDeleteTarget({ side: "left", file })}
           onOpenTerminal={onOpenTerminalAtPath && !sourceIsLocal ? (file) => handleOpenTerminal("left", file) : undefined}
-          onUploadDir={setUploadTarget}
+          onUploadDir={browsingInsideSyncRoot ? setUploadTarget : undefined}
           onRunFile={onOpenTerminalAndWriteCommand ? (file) => handleRunInBlender(file) : undefined}
         />
         <div className="hidden w-6 shrink-0 items-center justify-center md:flex">

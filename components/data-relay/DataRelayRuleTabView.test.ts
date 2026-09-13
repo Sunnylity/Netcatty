@@ -53,8 +53,10 @@ test("source-pane directories offer a one-shot overwrite upload to the destinati
     readFileSync(new URL("./NewFolderDialog.tsx", import.meta.url), "utf8"),
     /dataRelay\.context\.uploadDir/,
   );
-  assert.match(compareViewSource, /onUploadDir=\{setUploadTarget\}/);
   assert.match(compareViewSource, /onUploadDir && isDir\(file\)/);
+  // The action only appears while the source pane browses inside the sync root.
+  assert.match(compareViewSource, /isDataRelayPathUnderRoot\(sourceSyncRoot, left\.path\)/);
+  assert.match(compareViewSource, /browsingInsideSyncRoot \? setUploadTarget : undefined/);
   // The upload walks the subtree and overwrites into the mirrored target.
   assert.match(compareSessionSource, /collectDataRelayCompareTree\(/);
   assert.match(compareSessionSource, /dataRelaySubdirUploadRelativeDir\(/);
