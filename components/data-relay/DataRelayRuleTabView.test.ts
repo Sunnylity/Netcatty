@@ -73,22 +73,27 @@ test("the local machine is a selectable relay endpoint", () => {
   assert.match(readFileSync(new URL("../../application/state/useDataRelayFolderScan.ts", import.meta.url), "utf8"), /listLocalDir/);
 });
 
-test("local .py files offer Run in Blender through a device terminal", () => {
-  // Menu item exists and is bound to .py rows on local panes only.
+test("source-pane .py files offer Run in Blender through a typed command", () => {
+  // Menu item exists and is bound to .py rows on the SOURCE pane only.
   assert.match(
     readFileSync(new URL("./NewFolderDialog.tsx", import.meta.url), "utf8"),
     /dataRelay\.context\.runInBlender/,
   );
   assert.match(compareViewSource, /isPythonFile\(file\)/);
-  assert.match(compareViewSource, /sourceIsLocal && onOpenLocalTerminalAndRun/);
-  assert.match(compareViewSource, /destIsLocal && onOpenLocalTerminalAndRun/);
-  // The command quotes the Blender executable and the MSYS-converted script path.
+  const runBindings = compareViewSource.match(/handleRunInBlender\(file\)/g) ?? [];
+  assert.equal(runBindings.length, 1, "only the source pane binds Run in Blender");
+  assert.match(compareViewSource, /onOpenTerminalAndWriteCommand \? \(file\) => handleRunInBlender\(file\)/);
+  // The command quotes the Blender executable and the file path exactly as
+  // shown in the source pane; it is typed, not executed.
   assert.match(compareViewSource, /BLENDER_EXECUTABLE_MSYS_PATH/);
-  assert.match(compareViewSource, /toMsysCygdrivePath\(fullPath\)/);
-  assert.match(compareViewSource, /--python "\$\{scriptPath\}"/);
-  // AppView opens the local terminal tab and injects the command after the
-  // shell reports an idle prompt.
+  assert.match(compareViewSource, /--python "\$\{fullPath\}"/);
+  // Source device terminals open with the command; local sources open a
+  // local tab instead.
+  assert.match(compareViewSource, /sourceHost && !sourceIsLocal \? \{ host: sourceHost \}/);
   const appViewSource = readFileSync(new URL("../../application/app/AppView.tsx", import.meta.url), "utf8");
-  assert.match(appViewSource, /handleOpenLocalTerminalAndRun/);
-  assert.match(appViewSource, /isTerminalReadyForCommandInjection\(sessionId\)/);
+  assert.match(appViewSource, /handleOpenTerminalAndWriteCommand/);
+  assert.match(appViewSource, /isTerminalSensitiveInputActive\(sessionId\)/);
+  // Written without a trailing Enter — the user runs it manually.
+  assert.match(appViewSource, /writeToSession\(sessionId, command, \{ automated: true \}\)/);
+  assert.doesNotMatch(appViewSource, /writeToSession\(sessionId, `\$\{command\}\\\\r`/);
 });

@@ -34,7 +34,6 @@ import {
 import type { DataRelayCompareFile, DataRelayCompareKind } from "../../domain/dataRelayCompare";
 import { resolveDataRelayViewerStart } from "../../domain/dataRelayPaths";
 import { isDataRelayLocalHostId } from "../../domain/dataRelayLocal";
-import { toMsysCygdrivePath } from "../../domain/windowsShellPaths";
 import type { DataRelayRule, Host, Identity, KnownHost, SSHKey, TerminalSettings } from "../../domain/models";
 import { cn } from "../../lib/utils";
 import { SftpBreadcrumb } from "../sftp/SftpBreadcrumb";
@@ -76,8 +75,8 @@ export interface CompareViewProps {
   onStop: () => void;
   onScanSettingsChange: (updates: Partial<DataRelayRule> & { scanCheckpoint?: DataRelayRule["scanCheckpoint"] | null }) => void;
   onOpenTerminalAtPath?: (host: Host, path: string) => void;
-  /** Open a fresh local terminal tab and run one command in it. */
-  onOpenLocalTerminalAndRun?: (command: string, cwd?: string) => void;
+  /** Open a terminal tab (to `host`, or local) and type a command without running it. */
+  onOpenTerminalAndWriteCommand?: (options: { host?: Host; command: string; cwd?: string }) => void;
   /** Tab visibility: panes re-anchor to the rule paths every time it turns true. */
   visible?: boolean;
 }
@@ -323,7 +322,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
   onStop,
   onScanSettingsChange,
   onOpenTerminalAtPath,
-  onOpenLocalTerminalAndRun,
+  onOpenTerminalAndWriteCommand,
   visible = true,
 }) => {
   const { t } = useI18n();
@@ -576,16 +575,22 @@ export const CompareView: React.FC<CompareViewProps> = ({
     );
   }, [destHost, left, onOpenTerminalAtPath, right, sourceHost]);
 
-  /** Local .py files: open a device terminal and run Blender on the script. */
-  const handleRunInBlender = useCallback((side: DataRelayCompareSide, file: DataRelayCompareFile) => {
-    if (!onOpenLocalTerminalAndRun) return;
-    const pane = side === "left" ? left : right;
-    const fullPath = joinPath(pane.path, file.name);
-    const scriptPath = toMsysCygdrivePath(fullPath);
-    if (!scriptPath) return;
-    const command = `"${BLENDER_EXECUTABLE_MSYS_PATH}" --python "${scriptPath}"`;
-    onOpenLocalTerminalAndRun(command, getParentPath(fullPath));
-  }, [left, onOpenLocalTerminalAndRun, right]);
+  /**
+   * Source .py files: open a new terminal tab on the source device (a local
+   * terminal when the source is this machine) with the Blender command typed
+   * at the prompt — path substituted with the file as shown in the pane. The
+   * command is NOT executed; the user reviews it and presses Enter.
+   */
+  const handleRunInBlender = useCallback((file: DataRelayCompareFile) => {
+    if (!onOpenTerminalAndWriteCommand) return;
+    const fullPath = joinPath(left.path, file.name);
+    const command = `"${BLENDER_EXECUTABLE_MSYS_PATH}" --python "${fullPath}"`;
+    onOpenTerminalAndWriteCommand({
+      ...(sourceHost && !sourceIsLocal ? { host: sourceHost } : {}),
+      command,
+      cwd: getParentPath(fullPath),
+    });
+  }, [left.path, onOpenTerminalAndWriteCommand, sourceHost, sourceIsLocal]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -661,7 +666,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           onDelete={(file) => setDeleteTarget({ side: "left", file })}
           onOpenTerminal={onOpenTerminalAtPath && !sourceIsLocal ? (file) => handleOpenTerminal("left", file) : undefined}
           onUploadDir={setUploadTarget}
-          onRunFile={sourceIsLocal && onOpenLocalTerminalAndRun ? (file) => handleRunInBlender("left", file) : undefined}
+          onRunFile={onOpenTerminalAndWriteCommand ? (file) => handleRunInBlender(file) : undefined}
         />
         <div className="hidden w-6 shrink-0 items-center justify-center md:flex">
           <ArrowLeftRight size={16} className="text-muted-foreground" />
@@ -688,7 +693,6 @@ export const CompareView: React.FC<CompareViewProps> = ({
           onPaste={destIsLocal ? undefined : () => void handlePaste("right")}
           onDelete={(file) => setDeleteTarget({ side: "right", file })}
           onOpenTerminal={onOpenTerminalAtPath && !destIsLocal ? (file) => handleOpenTerminal("right", file) : undefined}
-          onRunFile={destIsLocal && onOpenLocalTerminalAndRun ? (file) => handleRunInBlender("right", file) : undefined}
         />
       </div>
 

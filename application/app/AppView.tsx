@@ -7,6 +7,8 @@ import { releaseEditorTabSaveCoordinator, saveEditorTab } from '../state/editorT
 import { useTerminalHostTreeLayoutWidth } from '../state/terminalHostTreeStore';
 import { useTerminalBackend } from '../state/useTerminalBackend';
 import { isTerminalReadyForCommandInjection } from '../../components/terminal/runtime/terminalCommandInjectionReadyRegistry';
+import { isTerminalSensitiveInputActive } from '../../components/terminal/runtime/terminalSensitiveInputRegistry';
+import type { Host } from '../../domain/models';
 import { TopTabs } from '../../components/TopTabs';
 import { VaultView } from '../../components/VaultView';
 import { QuickAddSnippetDialog } from '../../components/QuickAddSnippetDialog';
@@ -296,27 +298,39 @@ function AppViewInner({ domains }: AppViewProps) {
   const { writeToSession } = useTerminalBackend();
 
   /**
-   * Open a fresh local terminal tab and run one command in it. A freshly
-   * spawned local shell buffers early keystrokes, so the readiness poll only
-   * avoids garbling mid-boot output; after the deadline the command is sent
-   * regardless and executes once the prompt appears.
+   * Open a fresh terminal tab — connected to `host`, or a local terminal when
+   * no host is given — and type one command at its prompt WITHOUT running it:
+   * the user reviews/edits and presses Enter. Fresh local shells buffer early
+   * keystrokes, so writing at the deadline is safe there; remote shells may
+   * legitimately sit at auth prompts, so they only ever receive the text at a
+   * real idle prompt and never while sensitive (password/MFA) input is active.
    */
-  const handleOpenLocalTerminalAndRun = useCallback((command: string, cwd?: string) => {
-    const sessionId = handleCreateLocalTerminal(undefined, cwd ? { localStartDir: cwd } : undefined);
+  const handleOpenTerminalAndWriteCommand = useCallback((
+    options: { host?: Host; command: string; cwd?: string },
+  ) => {
+    const { host, command, cwd } = options;
+    const sessionId = host
+      ? handleConnectToHost(host, false, false, cwd ? { pendingInitialCwd: cwd } : undefined)
+      : handleCreateLocalTerminal(undefined, cwd ? { localStartDir: cwd } : undefined);
     if (!sessionId) return;
     const send = () => {
-      writeToSession(sessionId, `${command}\r`, { automated: true });
+      writeToSession(sessionId, command, { automated: true });
     };
-    const deadline = Date.now() + 15_000;
+    const deadline = Date.now() + (host ? 60_000 : 15_000);
     const poll = () => {
-      if (isTerminalReadyForCommandInjection(sessionId) || Date.now() >= deadline) {
+      if (isTerminalSensitiveInputActive(sessionId)) return;
+      if (isTerminalReadyForCommandInjection(sessionId)) {
         send();
         return;
       }
-      setTimeout(poll, 250);
+      if (!host && Date.now() >= deadline) {
+        send();
+        return;
+      }
+      if (Date.now() < deadline) setTimeout(poll, 250);
     };
     poll();
-  }, [handleCreateLocalTerminal, writeToSession]);
+  }, [handleConnectToHost, handleCreateLocalTerminal, writeToSession]);
 
   // Chrome-visible settings slice comes from settingsChromeStore, not from the
   // App chrome domain bag — the whole `settings` object changes identity on
@@ -855,7 +869,7 @@ function AppViewInner({ domains }: AppViewProps) {
                 knownHosts={effectiveKnownHosts}
                 terminalSettings={terminalSettings}
                 onOpenTerminalAtPath={(host, path) => handleConnectToHost(host, false, false, { pendingInitialCwd: path })}
-                onOpenLocalTerminalAndRun={handleOpenLocalTerminalAndRun}
+                onOpenTerminalAndWriteCommand={handleOpenTerminalAndWriteCommand}
               />
             </Suspense>
           </LazyLoadBoundary>
