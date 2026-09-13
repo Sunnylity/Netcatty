@@ -593,9 +593,11 @@ export const CompareView: React.FC<CompareViewProps> = ({
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">{rule.label}</div>
           <div className="truncate font-mono text-[11px] text-muted-foreground">
-            {hostLabel(sourceHost)} {left.ready ? left.path : (rule.sourcePath || rule.sourceCommand)}
+            {/* Always show the configured sync roots — the browsed pane paths
+                change with navigation and would hide what is actually synced. */}
+            {hostLabel(sourceHost)} {rule.sourcePath || rule.sourceCommand}
             <span className="mx-1 opacity-60">-&gt;</span>
-            {hostLabel(destHost)} {right.ready ? right.path : rule.destPath}
+            {hostLabel(destHost)} {rule.destPath}
           </div>
           {rule.error ? (
             <div className="truncate text-[11px] text-destructive">{rule.error}</div>
