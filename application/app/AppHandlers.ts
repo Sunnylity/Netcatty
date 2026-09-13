@@ -1048,6 +1048,7 @@ export function handleCreateLocalTerminalImpl(
       localHostname: hostname,
       saved: false,
     });
+    return sessionId;
   }
 }
 

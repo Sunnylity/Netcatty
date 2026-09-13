@@ -34,6 +34,7 @@ import {
 import type { DataRelayCompareFile, DataRelayCompareKind } from "../../domain/dataRelayCompare";
 import { resolveDataRelayViewerStart } from "../../domain/dataRelayPaths";
 import { isDataRelayLocalHostId } from "../../domain/dataRelayLocal";
+import { toMsysCygdrivePath } from "../../domain/windowsShellPaths";
 import type { DataRelayRule, Host, Identity, KnownHost, SSHKey, TerminalSettings } from "../../domain/models";
 import { cn } from "../../lib/utils";
 import { SftpBreadcrumb } from "../sftp/SftpBreadcrumb";
@@ -75,6 +76,8 @@ export interface CompareViewProps {
   onStop: () => void;
   onScanSettingsChange: (updates: Partial<DataRelayRule> & { scanCheckpoint?: DataRelayRule["scanCheckpoint"] | null }) => void;
   onOpenTerminalAtPath?: (host: Host, path: string) => void;
+  /** Open a fresh local terminal tab and run one command in it. */
+  onOpenLocalTerminalAndRun?: (command: string, cwd?: string) => void;
   /** Tab visibility: panes re-anchor to the rule paths every time it turns true. */
   visible?: boolean;
 }
@@ -108,6 +111,13 @@ const kindClass = (kind: DataRelayCompareKind | undefined): string => {
 const isDir = (file: DataRelayCompareFile): boolean =>
   file.type === "directory" || file.linkTarget === "directory";
 
+// MSYS path of the Blender executable used by "Run in Blender" on local .py
+// files. Adjust here when Blender updates or lives elsewhere.
+const BLENDER_EXECUTABLE_MSYS_PATH = "/c/Program Files/Blender Foundation/Blender 5.1/blender.exe";
+
+const isPythonFile = (file: DataRelayCompareFile): boolean =>
+  !isDir(file) && file.name.toLowerCase().endsWith(".py");
+
 const ComparePane: React.FC<{
   side: DataRelayCompareSide;
   title: string;
@@ -132,6 +142,8 @@ const ComparePane: React.FC<{
   onOpenTerminal?: (file?: DataRelayCompareFile) => void;
   /** Source pane only: push one subdirectory to the destination (overwrite). */
   onUploadDir?: (file: DataRelayCompareFile) => void;
+  /** Local panes only: run a .py file in Blender on this device. */
+  onRunFile?: (file: DataRelayCompareFile) => void;
 }> = ({
   side,
   title,
@@ -155,6 +167,7 @@ const ComparePane: React.FC<{
   onDelete,
   onOpenTerminal,
   onUploadDir,
+  onRunFile,
 }) => {
   const { t } = useI18n();
   const parentPath = getParentPath(pane.path);
@@ -261,6 +274,7 @@ const ComparePane: React.FC<{
                       onDelete={() => onDelete(file)}
                       onOpenTerminal={onOpenTerminal ? () => onOpenTerminal(file) : undefined}
                       onUploadDir={onUploadDir && isDir(file) ? () => onUploadDir(file) : undefined}
+                      onRunFile={onRunFile && isPythonFile(file) ? () => onRunFile(file) : undefined}
                     >
                       <button
                         type="button"
@@ -309,6 +323,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
   onStop,
   onScanSettingsChange,
   onOpenTerminalAtPath,
+  onOpenLocalTerminalAndRun,
   visible = true,
 }) => {
   const { t } = useI18n();
@@ -561,6 +576,17 @@ export const CompareView: React.FC<CompareViewProps> = ({
     );
   }, [destHost, left, onOpenTerminalAtPath, right, sourceHost]);
 
+  /** Local .py files: open a device terminal and run Blender on the script. */
+  const handleRunInBlender = useCallback((side: DataRelayCompareSide, file: DataRelayCompareFile) => {
+    if (!onOpenLocalTerminalAndRun) return;
+    const pane = side === "left" ? left : right;
+    const fullPath = joinPath(pane.path, file.name);
+    const scriptPath = toMsysCygdrivePath(fullPath);
+    if (!scriptPath) return;
+    const command = `"${BLENDER_EXECUTABLE_MSYS_PATH}" --python "${scriptPath}"`;
+    onOpenLocalTerminalAndRun(command, getParentPath(fullPath));
+  }, [left, onOpenLocalTerminalAndRun, right]);
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
@@ -633,6 +659,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           onDelete={(file) => setDeleteTarget({ side: "left", file })}
           onOpenTerminal={onOpenTerminalAtPath && !sourceIsLocal ? (file) => handleOpenTerminal("left", file) : undefined}
           onUploadDir={setUploadTarget}
+          onRunFile={sourceIsLocal && onOpenLocalTerminalAndRun ? (file) => handleRunInBlender("left", file) : undefined}
         />
         <div className="hidden w-6 shrink-0 items-center justify-center md:flex">
           <ArrowLeftRight size={16} className="text-muted-foreground" />
@@ -659,6 +686,7 @@ export const CompareView: React.FC<CompareViewProps> = ({
           onPaste={destIsLocal ? undefined : () => void handlePaste("right")}
           onDelete={(file) => setDeleteTarget({ side: "right", file })}
           onOpenTerminal={onOpenTerminalAtPath && !destIsLocal ? (file) => handleOpenTerminal("right", file) : undefined}
+          onRunFile={destIsLocal && onOpenLocalTerminalAndRun ? (file) => handleRunInBlender("right", file) : undefined}
         />
       </div>
 

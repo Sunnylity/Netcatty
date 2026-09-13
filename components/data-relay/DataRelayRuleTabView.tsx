@@ -20,6 +20,8 @@ export interface DataRelayRuleTabViewProps {
     "verifyHostKeys" | "keepaliveInterval" | "keepaliveCountMax"
   >;
   onOpenTerminalAtPath?: (host: Host, path: string) => void;
+  /** Open a fresh local terminal tab and run one command in it. */
+  onOpenLocalTerminalAndRun?: (command: string, cwd?: string) => void;
 }
 
 export function getDataRelayRuleTabShellStyle(isVisible: boolean): React.CSSProperties {
@@ -37,6 +39,7 @@ export const DataRelayRuleTabView: React.FC<DataRelayRuleTabViewProps> = ({
   knownHosts,
   terminalSettings,
   onOpenTerminalAtPath,
+  onOpenLocalTerminalAndRun,
 }) => {
   const { t } = useI18n();
   const isVisible = useIsTabActive(tab.id);
@@ -103,6 +106,7 @@ export const DataRelayRuleTabView: React.FC<DataRelayRuleTabViewProps> = ({
         }}
         onScanSettingsChange={persistScanSettings}
         onOpenTerminalAtPath={onOpenTerminalAtPath}
+        onOpenLocalTerminalAndRun={onOpenLocalTerminalAndRun}
         visible={isVisible}
       />
       {editing && (

@@ -72,3 +72,23 @@ test("the local machine is a selectable relay endpoint", () => {
   assert.match(compareSessionSource, /listLocalDir/);
   assert.match(readFileSync(new URL("../../application/state/useDataRelayFolderScan.ts", import.meta.url), "utf8"), /listLocalDir/);
 });
+
+test("local .py files offer Run in Blender through a device terminal", () => {
+  // Menu item exists and is bound to .py rows on local panes only.
+  assert.match(
+    readFileSync(new URL("./NewFolderDialog.tsx", import.meta.url), "utf8"),
+    /dataRelay\.context\.runInBlender/,
+  );
+  assert.match(compareViewSource, /isPythonFile\(file\)/);
+  assert.match(compareViewSource, /sourceIsLocal && onOpenLocalTerminalAndRun/);
+  assert.match(compareViewSource, /destIsLocal && onOpenLocalTerminalAndRun/);
+  // The command quotes the Blender executable and the MSYS-converted script path.
+  assert.match(compareViewSource, /BLENDER_EXECUTABLE_MSYS_PATH/);
+  assert.match(compareViewSource, /toMsysCygdrivePath\(fullPath\)/);
+  assert.match(compareViewSource, /--python "\$\{scriptPath\}"/);
+  // AppView opens the local terminal tab and injects the command after the
+  // shell reports an idle prompt.
+  const appViewSource = readFileSync(new URL("../../application/app/AppView.tsx", import.meta.url), "utf8");
+  assert.match(appViewSource, /handleOpenLocalTerminalAndRun/);
+  assert.match(appViewSource, /isTerminalReadyForCommandInjection\(sessionId\)/);
+});

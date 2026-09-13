@@ -5,6 +5,8 @@ import { activeTabStore, toEditorTabId, useIsEditorTabActive } from '../state/ac
 import { editorTabStore } from '../state/editorTabStore';
 import { releaseEditorTabSaveCoordinator, saveEditorTab } from '../state/editorTabSave';
 import { useTerminalHostTreeLayoutWidth } from '../state/terminalHostTreeStore';
+import { useTerminalBackend } from '../state/useTerminalBackend';
+import { isTerminalReadyForCommandInjection } from '../../components/terminal/runtime/terminalCommandInjectionReadyRegistry';
 import { TopTabs } from '../../components/TopTabs';
 import { VaultView } from '../../components/VaultView';
 import { QuickAddSnippetDialog } from '../../components/QuickAddSnippetDialog';
@@ -290,6 +292,31 @@ function AppViewInner({ domains }: AppViewProps) {
     updateProxyProfiles, updateSnippetPackages, updateSnippets, updateSplitSizes, updateTerminalSetting, vaultFocusRequest, workspaceRenameTarget, workspaces,
     VaultViewContainer, SftpViewMount, TerminalLayerMount, LogViewWrapper,
   } = ctx;
+
+  const { writeToSession } = useTerminalBackend();
+
+  /**
+   * Open a fresh local terminal tab and run one command in it. A freshly
+   * spawned local shell buffers early keystrokes, so the readiness poll only
+   * avoids garbling mid-boot output; after the deadline the command is sent
+   * regardless and executes once the prompt appears.
+   */
+  const handleOpenLocalTerminalAndRun = useCallback((command: string, cwd?: string) => {
+    const sessionId = handleCreateLocalTerminal(undefined, cwd ? { localStartDir: cwd } : undefined);
+    if (!sessionId) return;
+    const send = () => {
+      writeToSession(sessionId, `${command}\r`, { automated: true });
+    };
+    const deadline = Date.now() + 15_000;
+    const poll = () => {
+      if (isTerminalReadyForCommandInjection(sessionId) || Date.now() >= deadline) {
+        send();
+        return;
+      }
+      setTimeout(poll, 250);
+    };
+    poll();
+  }, [handleCreateLocalTerminal, writeToSession]);
 
   // Chrome-visible settings slice comes from settingsChromeStore, not from the
   // App chrome domain bag — the whole `settings` object changes identity on
@@ -828,6 +855,7 @@ function AppViewInner({ domains }: AppViewProps) {
                 knownHosts={effectiveKnownHosts}
                 terminalSettings={terminalSettings}
                 onOpenTerminalAtPath={(host, path) => handleConnectToHost(host, false, false, { pendingInitialCwd: path })}
+                onOpenLocalTerminalAndRun={handleOpenLocalTerminalAndRun}
               />
             </Suspense>
           </LazyLoadBoundary>

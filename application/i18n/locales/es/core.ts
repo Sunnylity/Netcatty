@@ -1070,6 +1070,7 @@ Resalta el panel dividido enfocado:
   'dataRelay.context.uploadDirTarget': 'Destino',
   'dataRelay.context.uploadDirDone': 'Se subieron {count} archivo(s)',
   'dataRelay.context.uploadDirFailed': '{count} archivo(s) no se pudieron subir',
+  'dataRelay.context.runInBlender': 'Ejecutar en Blender',
   'dataRelay.localHost': 'Este equipo',
   'vault.nav.snippets': 'Scripts',
   'vault.nav.notes': 'Notas',

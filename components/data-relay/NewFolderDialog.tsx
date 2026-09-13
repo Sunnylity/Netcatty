@@ -5,6 +5,7 @@ import {
   FilePlus,
   FolderPlus,
   Loader2,
+  Play,
   RefreshCw,
   Terminal,
   Trash2,
@@ -47,6 +48,8 @@ export interface PathListContextActions {
   onDelete?: () => void;
   /** Push one source subdirectory to the destination, overwriting. */
   onUploadDir?: () => void;
+  /** Run a local .py file in Blender on this device. */
+  onRunFile?: () => void;
 }
 
 const PathListContextMenuItems: React.FC<PathListContextActions & { variant: "row" | "empty" }> = ({
@@ -63,6 +66,7 @@ const PathListContextMenuItems: React.FC<PathListContextActions & { variant: "ro
   onRefresh,
   onDelete,
   onUploadDir,
+  onRunFile,
 }) => {
   const { t } = useI18n();
   const clipboard = useDataRelayPathClipboard();
@@ -95,6 +99,12 @@ const PathListContextMenuItems: React.FC<PathListContextActions & { variant: "ro
               {t("dataRelay.context.uploadDir")}
             </ContextMenuItem>
           </>
+        ) : null}
+        {onRunFile ? (
+          <ContextMenuItem disabled={disabled} onSelect={onRunFile}>
+            <Play size={14} className="mr-2" />
+            {t("dataRelay.context.runInBlender")}
+          </ContextMenuItem>
         ) : null}
         <ContextMenuSeparator />
         <ContextMenuItem disabled={disabled} onSelect={onNewFolder}>

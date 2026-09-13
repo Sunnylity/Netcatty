@@ -1112,6 +1112,7 @@ Highlight the focused split pane:
   'dataRelay.context.uploadDirTarget': 'Target',
   'dataRelay.context.uploadDirDone': 'Uploaded {count} file(s)',
   'dataRelay.context.uploadDirFailed': '{count} file(s) failed to upload',
+  'dataRelay.context.runInBlender': 'Run in Blender',
   'dataRelay.localHost': 'This device',
   'vault.nav.snippets': 'Scripts',
   'vault.nav.notes': 'Notes',
